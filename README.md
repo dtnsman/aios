@@ -1,6 +1,8 @@
 # aios
 ai os
 
-writen by ai
+written by ai
 
-10k lines code
+20k lines code
+
+a big project written by T100 ai coder
