@@ -11,7 +11,7 @@ a big project written by T100 ai coder
 
 ## usage:
 
-### add url app
+### easily add url app
 
 ```javascript
 AppManager.registerApp({
