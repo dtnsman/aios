@@ -18,7 +18,7 @@ AppManager.registerApp({
     id: 'web3OS',
     name: 'Web3 OS',
     icon: 'fas fa-globe',
-    description: 'Web3操作系统界面',
+    description: 'Web3 os website',
     color: '#8b5cf6',
     windowConfig: {
         width: 1200,
