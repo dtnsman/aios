@@ -3,7 +3,7 @@ ai os
 
 written by ai
 
-20k lines code
+21k lines code
 
 a big project written by T100 ai coder
 
@@ -16,10 +16,11 @@ a big project written by T100 ai coder
 ```javascript
 AppManager.registerApp({
     id: 'web3OS',
-    name: 'Web3 OS',
+    name: '智体OS-lite',
     icon: 'fas fa-globe',
-    description: 'Web3 os website',
+    description: 'Web3操作系统界面',
     color: '#8b5cf6',
+    allowMultiple: true,    // update here 
     windowConfig: {
         width: 1200,
         height: 800
