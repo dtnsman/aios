@@ -1147,7 +1147,8 @@
         
         .window-content {
             flex: 1;
-            padding: var(--space-lg);
+            padding: 5px;
+            /* var(--space-lg); */
             overflow: auto;
             -webkit-overflow-scrolling: touch;
         }
@@ -1722,11 +1723,136 @@
                 destroy
             };
         })();
+
+        // 添加CSS样式支持任务栏滚动
+        const addTaskbarStyles = () => {
+            const style = document.createElement('style');
+            style.textContent = `
+                .taskbar-icons {
+                    display: flex;
+                    align-items: center;
+                    gap: var(--space-sm);
+                    margin-left: var(--space-md);
+                    flex: 1;
+                    overflow-x: auto;
+                    scrollbar-width: none;
+                    padding: 0 4px;
+                    scroll-behavior: smooth;
+                    -webkit-overflow-scrolling: touch; /* 移动端平滑滚动 */
+                    cursor: grab;
+                }
+                
+                .taskbar-icons::-webkit-scrollbar {
+                    display: none;
+                }
+                
+                .taskbar-icons:active {
+                    cursor: grabbing;
+                }
+                
+                .taskbar-icon {
+                    width: 40px;
+                    height: 40px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: var(--border-radius-md);
+                    cursor: pointer;
+                    transition: all var(--transition-fast);
+                    color: var(--text-secondary);
+                    flex-shrink: 0;
+                    position: relative;
+                    user-select: none;
+                }
+                
+                .taskbar-icon:hover,
+                .taskbar-icon.active {
+                    background-color: rgba(59, 130, 246, 0.2);
+                    color: var(--color-primary);
+                }
+                
+                .taskbar-icon.minimized {
+                    opacity: 0.7;
+                }
+                
+                .taskbar-icon.active::after {
+                    content: '';
+                    position: absolute;
+                    bottom: 2px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    width: 4px;
+                    height: 4px;
+                    background-color: var(--color-primary);
+                    border-radius: 50%;
+                }
+                
+                .taskbar-icon.minimized::before {
+                    content: '';
+                    position: absolute;
+                    top: 2px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    width: 4px;
+                    height: 4px;
+                    background-color: var(--color-warning);
+                    border-radius: 50%;
+                }
+                
+                /* 滚动提示效果 */
+                .taskbar-icons::before,
+                .taskbar-icons::after {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    bottom: 0;
+                    width: 20px;
+                    pointer-events: none;
+                    opacity: 0;
+                    transition: opacity 0.3s;
+                    z-index: 1;
+                }
+                
+                .taskbar-icons::before {
+                    left: 0;
+                    background: linear-gradient(to right, var(--bg-primary), transparent);
+                }
+                
+                .taskbar-icons::after {
+                    right: 0;
+                    background: linear-gradient(to left, var(--bg-primary), transparent);
+                }
+                
+                .taskbar-icons.scroll-left::before,
+                .taskbar-icons.scroll-right::after {
+                    opacity: 0.8;
+                }
+                
+                /* 移动端优化 */
+                @media (max-width: 768px) {
+                    .taskbar-icons {
+                        padding: 0 8px;
+                        gap: var(--space-xs);
+                    }
+                    
+                    .taskbar-icon {
+                        width: 36px;
+                        height: 36px;
+                        font-size: 0.9em;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        };
         
         // 5. 窗口管理模块
         const WindowManager = (() => {
             const windows = new Map();
             let zIndexCounter = 100;
+            
+            // 添加窗口状态映射
+            const windowTaskbarMap = new Map(); // windowId -> taskbarIconId
+            const taskbarWindowMap = new Map(); // taskbarIconId -> windowId
             
             const createWindow = (config) => {
                 const windowId = CoreUtils.generateId('window');
@@ -1751,7 +1877,8 @@
                     zIndex: zIndexCounter++,
                     onClose: config.onClose,
                     onMinimize: config.onMinimize,
-                    onMaximize: config.onMaximize
+                    onMaximize: config.onMaximize,
+                    appId: config.appId // 新增：记录应用ID
                 };
                 
                 windows.set(windowId, window);
@@ -1763,9 +1890,300 @@
                 renderWindow(window);
                 bringToFront(windowId);
                 
+                // 在任务栏添加图标
+                addToTaskbar(windowId, window.title, window.icon, window.appId);
+                
                 return windowId;
             };
+
+            // 新增：任务栏滚动管理
+            const taskbarScroll = {
+                hoverTimer: null,
+                scrollDirection: null,
+                scrollSpeed: 30, // 滚动速度（像素/秒）
+                isScrolling: false,
+                
+                // 初始化任务栏滚动
+                init: function() {
+                    const taskbarIcons = document.querySelector('.taskbar-icons');
+                    if (!taskbarIcons) return;
+                    
+                    // 鼠标悬停事件
+                    taskbarIcons.addEventListener('mouseenter', (e) => {
+                        this.checkScrollNeeded(e);
+                    });
+                    
+                    taskbarIcons.addEventListener('mousemove', (e) => {
+                        this.checkScrollNeeded(e);
+                    });
+                    
+                    taskbarIcons.addEventListener('mouseleave', () => {
+                        this.stopScrolling();
+                    });
+                    
+                    // 触摸事件（移动端）
+                    let touchStartX = 0;
+                    let isDragging = false;
+                    
+                    taskbarIcons.addEventListener('touchstart', (e) => {
+                        touchStartX = e.touches[0].clientX;
+                        isDragging = true;
+                        this.stopScrolling(); // 触摸时停止自动滚动
+                    }, { passive: true });
+                    
+                    taskbarIcons.addEventListener('touchmove', (e) => {
+                        if (!isDragging) return;
+                        
+                        const touchX = e.touches[0].clientX;
+                        const deltaX = touchStartX - touchX;
+                        
+                        // 手动滚动
+                        taskbarIcons.scrollLeft += deltaX;
+                        touchStartX = touchX;
+                        
+                        e.preventDefault();
+                    }, { passive: false });
+                    
+                    taskbarIcons.addEventListener('touchend', () => {
+                        isDragging = false;
+                    });
+                    
+                    // 防止点击时触发滚动
+                    taskbarIcons.addEventListener('mousedown', () => {
+                        this.stopScrolling();
+                    });
+                    
+                    // 响应式调整：窗口大小变化时重新检查
+                    window.addEventListener('resize', () => {
+                        this.checkScrollNeeded();
+                    });
+
+                    // 监听滚动事件，更新提示
+                    taskbarIcons.addEventListener('scroll', () => {
+                        this.updateScrollHint();
+                    });
+                    
+                    // 初始更新一次
+                    setTimeout(() => {
+                        this.updateScrollHint();
+                    }, 100);
+                },
+                
+                // 检查是否需要滚动
+                checkScrollNeeded: function(e) {
+                    const taskbarIcons = document.querySelector('.taskbar-icons');
+                    if (!taskbarIcons || this.isScrolling) return;
+                    
+                    clearTimeout(this.hoverTimer);
+                    
+                    this.hoverTimer = setTimeout(() => {
+                        const rect = taskbarIcons.getBoundingClientRect();
+                        let mouseX = e ? e.clientX : rect.left + rect.width / 2;
+                        
+                        // 计算鼠标距离左右边缘的距离
+                        const leftDistance = mouseX - rect.left;
+                        const rightDistance = rect.right - mouseX;
+                        
+                        // 设置触发滚动的阈值（50像素）
+                        const threshold = 50;
+                        
+                        if (leftDistance < threshold && taskbarIcons.scrollLeft > 0) {
+                            // 鼠标在左侧，需要向右滚动显示左侧内容
+                            this.startScrolling('left');
+                        } else if (rightDistance < threshold && 
+                                taskbarIcons.scrollLeft < taskbarIcons.scrollWidth - taskbarIcons.clientWidth) {
+                            // 鼠标在右侧，需要向左滚动显示右侧内容
+                            this.startScrolling('right');
+                        } else {
+                            this.stopScrolling();
+                        }
+                    }, 1000); // 悬停1秒后触发
+                },
+                
+                // 开始滚动
+                startScrolling: function(direction) {
+                    if (this.isScrolling && this.scrollDirection === direction) return;
+                    
+                    this.stopScrolling();
+                    this.scrollDirection = direction;
+                    this.isScrolling = true;
+                    
+                    const taskbarIcons = document.querySelector('.taskbar-icons');
+                    if (!taskbarIcons) return;
+
+                    // 添加滚动提示类名
+                    taskbarIcons.classList.remove('scroll-left', 'scroll-right');
+                    taskbarIcons.classList.add(`scroll-${direction}`);
+                    
+                    const scrollStep = () => {
+                        if (!this.isScrolling) return;
+                        
+                        const currentScroll = taskbarIcons.scrollLeft;
+                        let newScroll;
+                        
+                        if (direction === 'left') {
+                            // 向左滚动（显示左侧内容）
+                            newScroll = Math.max(0, currentScroll - this.scrollSpeed);
+                        } else {
+                            // 向右滚动（显示右侧内容）
+                            const maxScroll = taskbarIcons.scrollWidth - taskbarIcons.clientWidth;
+                            newScroll = Math.min(maxScroll, currentScroll + this.scrollSpeed);
+                        }
+                        
+                        // 使用平滑滚动
+                        taskbarIcons.scrollTo({
+                            left: newScroll,
+                            behavior: 'smooth'
+                        });
+                        
+                        // 检查是否到达边界
+                        if ((direction === 'left' && newScroll <= 0) || 
+                            (direction === 'right' && newScroll >= taskbarIcons.scrollWidth - taskbarIcons.clientWidth)) {
+                            this.stopScrolling();
+                            return;
+                        }
+                        
+                        // 继续滚动
+                        requestAnimationFrame(scrollStep);
+                    };
+                    
+                    // 开始滚动循环
+                    requestAnimationFrame(scrollStep);
+                },
+                
+                // 停止滚动
+                stopScrolling: function() {
+                    this.isScrolling = false;
+                    this.scrollDirection = null;
+                    clearTimeout(this.hoverTimer);
+
+                    const taskbarIcons = document.querySelector('.taskbar-icons');
+                    if (taskbarIcons) {
+                        taskbarIcons.classList.remove('scroll-left', 'scroll-right');
+                    }
+                },
+
+                // 新增：更新滚动提示
+                updateScrollHint: function() {
+                    const taskbarIcons = document.querySelector('.taskbar-icons');
+                    if (!taskbarIcons) return;
+                    
+                    taskbarIcons.classList.remove('scroll-left', 'scroll-right');
+                    
+                    if (taskbarIcons.scrollLeft > 0) {
+                        taskbarIcons.classList.add('scroll-left');
+                    }
+                    
+                    if (taskbarIcons.scrollLeft < taskbarIcons.scrollWidth - taskbarIcons.clientWidth) {
+                        taskbarIcons.classList.add('scroll-right');
+                    }
+                },
+                
+                // 滚动到指定图标
+                scrollToIcon: function(iconElement) {
+                    const taskbarIcons = document.querySelector('.taskbar-icons');
+                    if (!taskbarIcons || !iconElement) return;
+                    
+                    const iconRect = iconElement.getBoundingClientRect();
+                    const containerRect = taskbarIcons.getBoundingClientRect();
+                    
+                    // 检查图标是否在可视区域内
+                    if (iconRect.left < containerRect.left) {
+                        // 图标在左侧，需要向右滚动
+                        const scrollAmount = taskbarIcons.scrollLeft - (containerRect.left - iconRect.left);
+                        taskbarIcons.scrollTo({
+                            left: Math.max(0, scrollAmount),
+                            behavior: 'smooth'
+                        });
+                    } else if (iconRect.right > containerRect.right) {
+                        // 图标在右侧，需要向左滚动
+                        const scrollAmount = taskbarIcons.scrollLeft + (iconRect.right - containerRect.right);
+                        const maxScroll = taskbarIcons.scrollWidth - taskbarIcons.clientWidth;
+                        taskbarIcons.scrollTo({
+                            left: Math.min(maxScroll, scrollAmount),
+                            behavior: 'smooth'
+                        });
+                    }
+                }
+            };
             
+            // 新增：在任务栏添加窗口图标
+            const addToTaskbar = (windowId, title, icon, appId) => {
+                const taskbarIcons = document.querySelector('.taskbar-icons');
+                if (!taskbarIcons) return;
+                
+                const taskbarIconId = CoreUtils.generateId('taskbar_icon');
+                const taskbarIcon = document.createElement('div');
+                taskbarIcon.id = taskbarIconId;
+                taskbarIcon.className = 'taskbar-icon';
+                taskbarIcon.title = title;
+                taskbarIcon.innerHTML = `<i class="${icon}"></i>`;
+                
+                // 点击任务栏图标恢复/最小化窗口
+                taskbarIcon.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const win = windows.get(windowId);
+                    if (win) {
+                        if (win.state === 'minimized') {
+                            restoreWindow(windowId);
+                        } else {
+                            minimizeWindow(windowId);
+                        }
+                    }
+                });
+                
+                // 右键菜单
+                taskbarIcon.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    showTaskbarContextMenu(e, windowId);
+                });
+                
+                taskbarIcons.appendChild(taskbarIcon);
+                
+                // 更新映射关系
+                windowTaskbarMap.set(windowId, taskbarIconId);
+                taskbarWindowMap.set(taskbarIconId, windowId);
+                
+                // 更新任务栏图标状态
+                updateTaskbarIconState(windowId);
+
+                // 新增：如果新图标在可视区域外，自动滚动到可见位置
+                setTimeout(() => {
+                    taskbarScroll.scrollToIcon(taskbarIcon);
+                }, 100);
+                
+                return taskbarIconId;
+            };
+            
+            // 新增：更新任务栏图标状态
+            const updateTaskbarIconState = (windowId) => {
+                const taskbarIconId = windowTaskbarMap.get(windowId);
+                if (!taskbarIconId) return;
+                
+                const taskbarIcon = document.getElementById(taskbarIconId);
+                if (!taskbarIcon) return;
+                
+                const window = windows.get(windowId);
+                if (!window) return;
+                
+                // 更新活动状态
+                const activeWindowId = StateManager.getState('activeWindowId');
+                if (windowId === activeWindowId && window.state !== 'minimized') {
+                    taskbarIcon.classList.add('active');
+                } else {
+                    taskbarIcon.classList.remove('active');
+                }
+                
+                // 更新最小化状态指示
+                if (window.state === 'minimized') {
+                    taskbarIcon.classList.add('minimized');
+                    taskbarIcon.style.opacity = '0.7';
+                } else {
+                    taskbarIcon.classList.remove('minimized');
+                    taskbarIcon.style.opacity = '1';
+                }
+            };
+
             const renderWindow = (window) => {
                 const container = document.getElementById('windowContainer');
                 if (!container) return;
@@ -1842,6 +2260,7 @@
                 activateWindow(window.id);
             };
             
+            // 修改：关闭窗口时移除任务栏图标
             const closeWindow = (windowId) => {
                 const window = windows.get(windowId);
                 if (!window) return;
@@ -1849,6 +2268,9 @@
                 if (window.onClose) {
                     window.onClose();
                 }
+                
+                // 移除任务栏图标
+                removeFromTaskbar(windowId);
                 
                 // 移除DOM元素
                 const element = document.getElementById(`window_${windowId}`);
@@ -1864,7 +2286,21 @@
                 // 触发事件
                 EventBus.emit('window:closed', { windowId });
             };
-
+            
+            // 新增：从任务栏移除图标
+            const removeFromTaskbar = (windowId) => {
+                const taskbarIconId = windowTaskbarMap.get(windowId);
+                if (!taskbarIconId) return;
+                
+                const taskbarIcon = document.getElementById(taskbarIconId);
+                if (taskbarIcon) {
+                    taskbarIcon.remove();
+                }
+                
+                windowTaskbarMap.delete(windowId);
+                taskbarWindowMap.delete(taskbarIconId);
+            };
+            
             const setupWindowEvents = (element, window) => {
                 const header = element.querySelector('.window-header');
                 const closeBtn = element.querySelector('.window-close');
@@ -1935,7 +2371,8 @@
                     bringToFront(window.id);
                 });
             };
-            
+
+            // 修改：最小化窗口
             const minimizeWindow = (windowId) => {
                 const window = windows.get(windowId);
                 if (!window) return;
@@ -1946,6 +2383,9 @@
                     element.style.display = 'none';
                 }
                 
+                // 更新任务栏图标状态
+                updateTaskbarIconState(windowId);
+                
                 if (window.onMinimize) {
                     window.onMinimize();
                 }
@@ -1953,6 +2393,24 @@
                 EventBus.emit('window:minimized', { windowId });
             };
             
+            // 新增：恢复窗口
+            const restoreWindow = (windowId) => {
+                const window = windows.get(windowId);
+                if (!window) return;
+                
+                window.state = 'normal';
+                const element = document.getElementById(`window_${windowId}`);
+                if (element) {
+                    element.style.display = 'flex';
+                    bringToFront(windowId);
+                }
+                
+                // 更新任务栏图标状态
+                updateTaskbarIconState(windowId);
+                
+                EventBus.emit('window:restored', { windowId });
+            };
+
             const toggleMaximize = (windowId) => {
                 const window = windows.get(windowId);
                 if (!window) return;
@@ -2002,6 +2460,7 @@
                 activateWindow(windowId);
             };
             
+            // 修改：激活窗口时更新任务栏
             const activateWindow = (windowId) => {
                 const window = windows.get(windowId);
                 if (!window) return;
@@ -2015,31 +2474,122 @@
                 });
                 
                 StateManager.setState('activeWindowId', windowId);
+                
+                // 更新所有任务栏图标状态
+                windows.forEach(win => {
+                    updateTaskbarIconState(win.id);
+                });
+                
                 EventBus.emit('window:activated', { windowId });
             };
             
-            const getWindow = (windowId) => {
-                return windows.get(windowId);
+            // 新增：显示任务栏右键菜单
+            const showTaskbarContextMenu = (e, windowId) => {
+                const menu = document.createElement('div');
+                menu.className = 'dropdown-menu';
+                menu.style.cssText = `
+                    position: fixed;
+                    left: ${e.clientX}px;
+                    top: ${e.clientY}px;
+                    z-index: 1000;
+                `;
+                
+                const window = windows.get(windowId);
+                if (!window) return;
+                
+                const items = [
+                    { 
+                        text: window.state === 'minimized' ? '恢复' : '最小化', 
+                        icon: window.state === 'minimized' ? 'fas fa-window-restore' : 'fas fa-window-minimize', 
+                        action: () => {
+                            if (window.state === 'minimized') {
+                                restoreWindow(windowId);
+                            } else {
+                                minimizeWindow(windowId);
+                            }
+                        }
+                    },
+                    { 
+                        text: '最大化', 
+                        icon: 'fas fa-window-maximize', 
+                        action: () => toggleMaximize(windowId),
+                        disabled: !window.maximizable
+                    },
+                    { 
+                        text: '关闭', 
+                        icon: 'fas fa-times', 
+                        action: () => closeWindow(windowId),
+                        disabled: !window.closable
+                    }
+                ];
+                
+                items.forEach(item => {
+                    if (item.disabled) return;
+                    
+                    const menuItem = document.createElement('button');
+                    menuItem.className = 'dropdown-item';
+                    menuItem.innerHTML = `
+                        <i class="${item.icon} mr-2"></i>
+                        ${item.text}
+                    `;
+                    menuItem.addEventListener('click', () => {
+                        item.action();
+                        menu.remove();
+                    });
+                    menu.appendChild(menuItem);
+                });
+                
+                document.body.appendChild(menu);
+                
+                // 点击其他地方关闭菜单
+                const closeMenu = (clickEvent) => {
+                    if (!menu.contains(clickEvent.target)) {
+                        menu.remove();
+                        document.removeEventListener('click', closeMenu);
+                    }
+                };
+                
+                setTimeout(() => {
+                    document.addEventListener('click', closeMenu);
+                }, 100);
             };
             
+            // 修改：获取所有窗口（包括任务栏信息）
             const getAllWindows = () => {
-                return Array.from(windows.values());
+                return Array.from(windows.values()).map(win => ({
+                    ...win,
+                    taskbarIconId: windowTaskbarMap.get(win.id)
+                }));
             };
+            
+            // 新增：通过应用ID获取所有窗口
+            const getWindowsByAppId = (appId) => {
+                return Array.from(windows.values()).filter(win => win.appId === appId);
+            };
+
+            const getWindow = (windowId) => {
+                        return windows.get(windowId);
+                    };
             
             return {
                 createWindow,
                 closeWindow,
                 minimizeWindow,
+                restoreWindow,
                 toggleMaximize,
                 bringToFront,
+                taskbarScroll,
                 getWindow,
-                getAllWindows
+                getAllWindows,
+                getWindowsByAppId // 新增
             };
         })();
         
         // 6. 应用管理模块 - 修正版本
+        // 修改AppManager模块，支持多实例
         const AppManager = (() => {
             const apps = new Map();
+            const appInstances = new Map(); // appId -> [windowId1, windowId2, ...]
             
             const registerApp = (appConfig) => {
                 const app = {
@@ -2050,10 +2600,12 @@
                     color: appConfig.color || '#3b82f6',
                     windowConfig: appConfig.windowConfig || {},
                     onLaunch: appConfig.onLaunch,
-                    onClose: appConfig.onClose
+                    onClose: appConfig.onClose,
+                    allowMultiple: appConfig.allowMultiple !== false // 新增：是否允许多实例
                 };
                 
                 apps.set(app.id, app);
+                appInstances.set(app.id, []);
                 return app.id;
             };
             
@@ -2063,6 +2615,22 @@
                     console.error(`App ${appId} not found`);
                     NotificationSystem.error('应用错误', `应用 ${appId} 未找到`);
                     return null;
+                }
+                
+                // 检查是否允许多实例
+                if (!app.allowMultiple && appInstances.get(appId).length > 0) {
+                    // 如果已有实例，激活第一个窗口
+                    const existingWindows = appInstances.get(appId);
+                    if (existingWindows.length > 0) {
+                        const firstWindowId = existingWindows[0];
+                        const window = WindowManager.getWindow(firstWindowId);
+                        if (window && window.state === 'minimized') {
+                            WindowManager.restoreWindow(firstWindowId);
+                        } else {
+                            WindowManager.bringToFront(firstWindowId);
+                        }
+                        return firstWindowId;
+                    }
                 }
                 
                 // 执行应用启动逻辑
@@ -2077,34 +2645,56 @@
                     }
                 }
                 
-                // 创建应用窗口 - 修正：将应用内容传递给窗口
+                // 创建应用窗口
                 const windowId = WindowManager.createWindow({
-                    title: app.name,
+                    title: `${app.name}${app.allowMultiple ? ` (${appInstances.get(appId).length + 1})` : ''}`,
                     icon: app.icon,
                     width: 600,
                     height: 400,
                     ...app.windowConfig,
                     ...options.windowConfig,
-                    content: appContent || `<div class="p-4">${app.name} 应用内容</div>`
+                    content: appContent || `<div class="p-4">${app.name} 应用内容</div>`,
+                    appId: app.id // 传递应用ID
+                });
+                
+                // 记录应用实例
+                appInstances.get(appId).push(windowId);
+                
+                // 监听窗口关闭事件，清理实例记录
+                const unsubscribe = EventBus.on(`window:closed:${windowId}`, () => {
+                    const instances = appInstances.get(appId);
+                    const index = instances.indexOf(windowId);
+                    if (index > -1) {
+                        instances.splice(index, 1);
+                    }
+                    unsubscribe();
                 });
                 
                 EventBus.emit('app:launched', { appId, windowId, options });
                 return windowId;
             };
             
+            const closeAllAppInstances = (appId) => {
+                const instances = appInstances.get(appId) || [];
+                instances.forEach(windowId => {
+                    WindowManager.closeWindow(windowId);
+                });
+                appInstances.set(appId, []);
+            };
             const getApp = (appId) => {
                 return apps.get(appId);
             };
-            
+                    
             const getAllApps = () => {
                 return Array.from(apps.values());
             };
-            
             return {
                 registerApp,
                 launchApp,
                 getApp,
-                getAllApps
+                getAllApps,
+                closeAllAppInstances,
+                getAppInstances: (appId) => appInstances.get(appId) || [] // 新增
             };
         })();
         
@@ -2614,98 +3204,127 @@
         // 13. 注册核心应用
         const registerCoreApps = () => {
             // AI助手应用 - 修正：确保返回有效的DOM元素
+
+            //ai助手
             AppManager.registerApp({
                 id: 'aiAssistant',
                 name: 'AI 助手',
                 icon: 'fas fa-robot',
                 description: '智能对话与任务处理',
                 color: '#3b82f6',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 500,
                     height: 600,
                     minWidth: 400,
                     minHeight: 300
                 },
                 onLaunch: () => {
-                    const chatHistory = [];
-                    
-                    // 创建聊天容器
                     const container = document.createElement('div');
-                    container.className = 'ai-chat h-full flex flex-col';
+                    container.className = 'h-full';
                     
-                    // 消息区域
-                    const messages = document.createElement('div');
-                    messages.className = 'chat-messages flex-1 overflow-auto p-2 mb-3';
-                    messages.id = `chatMessages_${Date.now()}`;
+                    const iframe = document.createElement('iframe');
+                    iframe.src = 'http://chat.dtns.top/ibchat-all.html?ib3hub=svrdev';
+                    iframe.className = 'w-full h-full border-0';
+                    iframe.allowFullscreen = true;
                     
-                    // 输入区域
-                    const inputArea = document.createElement('div');
-                    inputArea.className = 'flex gap-2 mt-2';
-                    
-                    const input = document.createElement('input');
-                    input.type = 'text';
-                    input.className = 'input flex-1';
-                    input.placeholder = '输入您的问题或指令...';
-                    
-                    const sendBtn = document.createElement('button');
-                    sendBtn.className = 'btn btn-primary';
-                    sendBtn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>发送';
-                    
-                    // 发送消息函数
-                    const sendMessage = async () => {
-                        const message = input.value.trim();
-                        if (!message) return;
-                        
-                        // 添加用户消息
-                        addMessage(message, 'user');
-                        input.value = '';
-                        
-                        // 模拟AI回复
-                        setTimeout(() => {
-                            const responses = [
-                                "我已经处理了您的请求。结果显示，系统运行正常，所有服务都在在线状态。",
-                                "根据您的指令，我已经更新了系统设置。这些更改将在下次重启后生效。",
-                                "我分析了您提供的数据，发现了一些有趣的模式。建议进一步调查这些异常值。",
-                                "您的请求已完成。需要我为您生成一份详细报告吗？",
-                                "系统检测到您的指令可能需要更多上下文。您能提供更多细节吗？",
-                                "根据当前系统状态，我建议优先处理安全更新。是否立即开始？",
-                                "我已经为您安排了提醒，并同步到所有设备。",
-                                "分析完成。结果显示性能提升了15%，内存使用减少了20%。"
-                            ];
-                            
-                            const response = responses[Math.floor(Math.random() * responses.length)];
-                            addMessage(response, 'ai');
-                        }, 500 + Math.random() * 1000);
-                    };
-                    
-                    sendBtn.addEventListener('click', sendMessage);
-                    input.addEventListener('keypress', (e) => {
-                        if (e.key === 'Enter') sendMessage();
-                    });
-                    
-                    inputArea.appendChild(input);
-                    inputArea.appendChild(sendBtn);
-                    
-                    // 添加消息函数
-                    const addMessage = (text, sender) => {
-                        const message = document.createElement('div');
-                        message.className = `message ${sender} mb-2`;
-                        message.textContent = text;
-                        messages.appendChild(message);
-                        messages.scrollTop = messages.scrollHeight;
-                        
-                        chatHistory.push({ text, sender, timestamp: new Date() });
-                    };
-                    
-                    // 添加初始消息
-                    addMessage('您好！我是AI助手，可以帮您处理各种任务。请问有什么可以为您效劳的？', 'ai');
-                    
-                    container.appendChild(messages);
-                    container.appendChild(inputArea);
-                    
+                    container.appendChild(iframe);
                     return container;
                 }
-            });
+            })
+
+
+            // AppManager.registerApp({
+            //     id: 'aiAssistant',
+            //     name: 'AI 助手',
+            //     icon: 'fas fa-robot',
+            //     description: '智能对话与任务处理',
+            //     color: '#3b82f6',
+            //     allowMultiple: true, windowConfig: {
+            //         width: 500,
+            //         height: 600,
+            //         minWidth: 400,
+            //         minHeight: 300
+            //     },
+            //     onLaunch: () => {
+            //         const chatHistory = [];
+                    
+            //         // 创建聊天容器
+            //         const container = document.createElement('div');
+            //         container.className = 'ai-chat h-full flex flex-col';
+                    
+            //         // 消息区域
+            //         const messages = document.createElement('div');
+            //         messages.className = 'chat-messages flex-1 overflow-auto p-2 mb-3';
+            //         messages.id = `chatMessages_${Date.now()}`;
+                    
+            //         // 输入区域
+            //         const inputArea = document.createElement('div');
+            //         inputArea.className = 'flex gap-2 mt-2';
+                    
+            //         const input = document.createElement('input');
+            //         input.type = 'text';
+            //         input.className = 'input flex-1';
+            //         input.placeholder = '输入您的问题或指令...';
+                    
+            //         const sendBtn = document.createElement('button');
+            //         sendBtn.className = 'btn btn-primary';
+            //         sendBtn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>发送';
+                    
+            //         // 发送消息函数
+            //         const sendMessage = async () => {
+            //             const message = input.value.trim();
+            //             if (!message) return;
+                        
+            //             // 添加用户消息
+            //             addMessage(message, 'user');
+            //             input.value = '';
+                        
+            //             // 模拟AI回复
+            //             setTimeout(() => {
+            //                 const responses = [
+            //                     "我已经处理了您的请求。结果显示，系统运行正常，所有服务都在在线状态。",
+            //                     "根据您的指令，我已经更新了系统设置。这些更改将在下次重启后生效。",
+            //                     "我分析了您提供的数据，发现了一些有趣的模式。建议进一步调查这些异常值。",
+            //                     "您的请求已完成。需要我为您生成一份详细报告吗？",
+            //                     "系统检测到您的指令可能需要更多上下文。您能提供更多细节吗？",
+            //                     "根据当前系统状态，我建议优先处理安全更新。是否立即开始？",
+            //                     "我已经为您安排了提醒，并同步到所有设备。",
+            //                     "分析完成。结果显示性能提升了15%，内存使用减少了20%。"
+            //                 ];
+                            
+            //                 const response = responses[Math.floor(Math.random() * responses.length)];
+            //                 addMessage(response, 'ai');
+            //             }, 500 + Math.random() * 1000);
+            //         };
+                    
+            //         sendBtn.addEventListener('click', sendMessage);
+            //         input.addEventListener('keypress', (e) => {
+            //             if (e.key === 'Enter') sendMessage();
+            //         });
+                    
+            //         inputArea.appendChild(input);
+            //         inputArea.appendChild(sendBtn);
+                    
+            //         // 添加消息函数
+            //         const addMessage = (text, sender) => {
+            //             const message = document.createElement('div');
+            //             message.className = `message ${sender} mb-2`;
+            //             message.textContent = text;
+            //             messages.appendChild(message);
+            //             messages.scrollTop = messages.scrollHeight;
+                        
+            //             chatHistory.push({ text, sender, timestamp: new Date() });
+            //         };
+                    
+            //         // 添加初始消息
+            //         addMessage('您好！我是AI助手，可以帮您处理各种任务。请问有什么可以为您效劳的？', 'ai');
+                    
+            //         container.appendChild(messages);
+            //         container.appendChild(inputArea);
+                    
+            //         return container;
+            //     }
+            // });
             
             // 文件管理器应用 - 修正：确保返回有效的DOM元素
             AppManager.registerApp({
@@ -2714,7 +3333,7 @@
                 icon: 'fas fa-folder',
                 description: '管理您的文件与文档',
                 color: '#10b981',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 700,
                     height: 500
                 },
@@ -2857,7 +3476,7 @@
                 icon: 'fas fa-wifi',
                 description: '网络连接与配置',
                 color: '#8b5cf6',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 600,
                     height: 500
                 },
@@ -2976,7 +3595,7 @@
                 icon: 'fas fa-cog',
                 description: '系统配置与个性化',
                 color: '#ef4444',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 650,
                     height: 550
                 },
@@ -3186,7 +3805,7 @@
                 icon: 'fas fa-terminal',
                 description: '命令行与AI指令',
                 color: '#06b6d4',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 700,
                     height: 500,
                     minWidth: 400,
@@ -3439,7 +4058,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-calendar-alt',
                 description: '日程管理与提醒',
                 color: '#ec4899',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 800,
                     height: 600
                 },
@@ -3708,7 +4327,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-sticky-note',
                 description: '记录与整理想法',
                 color: '#84cc16',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 800,
                     height: 600
                 },
@@ -3941,7 +4560,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-calculator',
                 description: '智能计算与单位转换',
                 color: '#f59e0b',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 400,
                     height: 500,
                     resizable: false
@@ -4204,7 +4823,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-cloud-sun',
                 description: '实时天气与AI预测',
                 color: '#06b6d4',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 500,
                     height: 600
                 },
@@ -4446,7 +5065,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-heartbeat',
                 description: '健康监测与建议',
                 color: '#ef4444',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 600,
                     height: 700
                 },
@@ -4660,7 +5279,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-music',
                 description: '播放与管理音乐',
                 color: '#ec4899',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 600,
                     height: 500
                 },
@@ -4908,7 +5527,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-paint-brush',
                 description: '数字绘画与创作',
                 color: '#8b5cf6',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 800,
                     height: 600
                 },
@@ -5240,7 +5859,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-code',
                 description: '智能代码编辑与调试',
                 color: '#06b6d4',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 800,
                     height: 600
                 },
@@ -5696,7 +6315,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-tasks',
                 description: '系统进程与性能监控',
                 color: '#f59e0b',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 700,
                     height: 500
                 },
@@ -6060,7 +6679,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-chart-line',
                 description: '实时性能图表与分析',
                 color: '#10b981',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 800,
                     height: 600
                 },
@@ -6472,7 +7091,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-envelope',
                 description: '邮件收发与管理',
                 color: '#3b82f6',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 900,
                     height: 700
                 },
@@ -7228,7 +7847,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-images',
                 description: '图片浏览与编辑',
                 color: '#ec4899',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 800,
                     height: 600
                 },
@@ -7627,7 +8246,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-video',
                 description: '视频播放与管理',
                 color: '#ef4444',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 800,
                     height: 600
                 },
@@ -8033,7 +8652,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-project-diagram',
                 description: '可视化思维整理工具',
                 color: '#8b5cf6',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 900,
                     height: 700
                 },
@@ -8889,7 +9508,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-book-open',
                 description: '电子书阅读与管理',
                 color: '#f59e0b',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 900,
                     height: 700
                 },
@@ -10290,7 +10909,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-images',
                 description: '照片管理与浏览',
                 color: '#ec4899',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 900,
                     height: 700
                 },
@@ -12324,7 +12943,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-blog',
                 description: '写作与内容管理',
                 color: '#8b5cf6',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 1000,
                     height: 700
                 },
@@ -13705,7 +14324,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-cloud',
                 description: '云端文件存储与同步',
                 color: '#06b6d4',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 900,
                     height: 700
                 },
@@ -15660,7 +16279,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-film',
                 description: '精彩短剧观看与收藏',
                 color: '#8b5cf6',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 900,
                     height: 700,
                     minWidth: 800,
@@ -17144,7 +17763,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-search',
                 description: '内置搜索引擎',
                 color: '#0078d4',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 1200,
                     height: 800,
                     minWidth: 800,
@@ -19068,7 +19687,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-trophy',
                 description: '热门榜单与数据分析',
                 color: '#FF6B35',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 1200,
                     height: 800,
                     minWidth: 900,
@@ -20704,7 +21323,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-globe',
                 description: 'Web3操作系统界面',
                 color: '#8b5cf6',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 1200,
                     height: 800
                 },
@@ -20731,7 +21350,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-globe',
                 description: '智体头榜——基于智体节点的社交消息榜',
                 color: '#8b5cf6',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 1200,
                     height: 800
                 },
@@ -20755,7 +21374,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-globe',
                 description: '智体OS————新一代AIOS操作系统',
                 color: '#8b5cf6',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 1200,
                     height: 800
                 },
@@ -20779,7 +21398,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 icon: 'fas fa-globe',
                 description: 'AIOS--writen by ai, 20k lines',
                 color: '#8b5cf6',
-                windowConfig: {
+                allowMultiple: true, windowConfig: {
                     width: 1200,
                     height: 800
                 },
@@ -20826,6 +21445,11 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
             setTimeout(() => {
                 NotificationSystem.success('系统启动', 'AI 操作系统已就绪');
             }, 1000);
+
+            // 初始化任务栏滚动
+            setTimeout(() => {
+                WindowManager.taskbarScroll.init();
+            }, 500);
         };
         
         // 15. 初始化桌面
@@ -20925,19 +21549,44 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
             }
             
             // 任务栏图标
+            // 修改任务栏图标点击事件
             document.querySelectorAll('.taskbar-icon').forEach(icon => {
-                icon.addEventListener('click', function() {
+                icon.addEventListener('click', function(e) {
+                    e.stopPropagation();
                     const appId = this.id.replace('Icon', '');
                     
-                    // 更新活动状态
-                    document.querySelectorAll('.taskbar-icon').forEach(i => {
-                        i.classList.remove('active');
-                    });
-                    this.classList.add('active');
-                    
-                    // 启动应用
-                    AppManager.launchApp(appId);
+                    // 如果是应用图标（不是窗口图标）
+                    if (appId && !this.id.startsWith('taskbar_icon_')) {
+                        // 更新活动状态
+                        document.querySelectorAll('.taskbar-icon').forEach(i => {
+                            if (i.id.startsWith('taskbar_icon_')) {
+                                i.classList.remove('active');
+                            }
+                        });
+                        this.classList.add('active');
+                        
+                        // 启动应用
+                        AppManager.launchApp(appId);
+                    }
                 });
+            });
+
+            
+            // 监听窗口状态变化，更新任务栏
+            EventBus.on('window:activated', ({ windowId }) => {
+                WindowManager.updateTaskbarIconState?.(windowId);
+            });
+            
+            EventBus.on('window:minimized', ({ windowId }) => {
+                WindowManager.updateTaskbarIconState?.(windowId);
+            });
+            
+            EventBus.on('window:restored', ({ windowId }) => {
+                WindowManager.updateTaskbarIconState?.(windowId);
+            });
+            
+            EventBus.on('window:maximized', ({ windowId }) => {
+                WindowManager.updateTaskbarIconState?.(windowId);
             });
             
             // 点击其他地方关闭开始菜单
