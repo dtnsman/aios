@@ -1352,6 +1352,179 @@
                 padding: var(--space-md);
             }
         }
+
+        /* 窗口边缘拖拽调整大小样式 */
+        .window-resize-handle {
+            position: absolute;
+            background: transparent;
+            z-index: 10;
+        }
+
+        /* 四个边 */
+        .window-resize-handle.n {
+            top: 0;
+            left: 5px;
+            right: 5px;
+            height: 5px;
+            cursor: n-resize;
+        }
+
+        .window-resize-handle.e {
+            top: 5px;
+            right: 0;
+            bottom: 5px;
+            width: 5px;
+            cursor: e-resize;
+        }
+
+        .window-resize-handle.s {
+            bottom: 0;
+            left: 5px;
+            right: 5px;
+            height: 5px;
+            cursor: s-resize;
+        }
+
+        .window-resize-handle.w {
+            top: 5px;
+            left: 0;
+            bottom: 5px;
+            width: 5px;
+            cursor: w-resize;
+        }
+
+        /* 四个角 */
+        .window-resize-handle.ne {
+            top: 0;
+            right: 0;
+            width: 10px;
+            height: 10px;
+            cursor: ne-resize;
+        }
+
+        .window-resize-handle.nw {
+            top: 0;
+            left: 0;
+            width: 10px;
+            height: 10px;
+            cursor: nw-resize;
+        }
+
+        .window-resize-handle.se {
+            bottom: 0;
+            right: 0;
+            width: 10px;
+            height: 10px;
+            cursor: se-resize;
+        }
+
+        .window-resize-handle.sw {
+            bottom: 0;
+            left: 0;
+            width: 10px;
+            height: 10px;
+            cursor: sw-resize;
+        }
+
+        /* 最大化时隐藏调整大小手柄 */
+        .window.maximized .window-resize-handle {
+            display: none;
+        }
+
+        /* 窗口全屏样式 */
+        .window.fullscreen {
+            width: 100vw !important;
+            height: 100vh !important;
+            left: 0 !important;
+            top: 0 !important;
+            border-radius: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            z-index: var(--z-index-modal) !important;
+        }
+
+        /* 全屏时隐藏任务栏 */
+        body.window-fullscreen .taskbar {
+            display: none;
+        }
+
+        /* 全屏时隐藏其他窗口 */
+        body.window-fullscreen .window:not(.fullscreen) {
+            display: none !important;
+        }
+
+        /* 全屏按钮样式 */
+        .window-fullscreen-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: var(--border-radius-sm);
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+
+        .window-fullscreen-btn:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+        }
+
+        .window-fullscreen-btn.fullscreen {
+            color: var(--color-primary);
+        }
+
+        /* 全屏退出提示 */
+        .fullscreen-exit-hint {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 16px;
+            border-radius: var(--border-radius-md);
+            font-size: var(--font-size-sm);
+            z-index: calc(var(--z-index-modal) + 10);
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        .fullscreen-exit-hint.show {
+            opacity: 1;
+        }
+
+        /* 移动端全屏优化 */
+        @media (max-width: 768px) {
+            .window.fullscreen {
+                /* 移动端全屏时隐藏控制栏，使用手势操作 */
+                .window-header {
+                    opacity: 0.3;
+                    transition: opacity 0.3s;
+                }
+                
+                .window-header:hover {
+                    opacity: 1;
+                }
+            }
+            
+            /* 移动端隐藏全屏退出提示 */
+            .fullscreen-exit-hint {
+                display: none;
+            }
+        }
+
+        /* 触摸设备优化 */
+        @media (hover: none) and (pointer: coarse) {
+            .window.fullscreen .window-resize-handle {
+                /* 触摸设备上增大拖拽区域 */
+                min-width: 20px;
+                min-height: 20px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1875,6 +2048,7 @@
                     closable: config.closable !== false,
                     minimizable: config.minimizable !== false,
                     maximizable: config.maximizable !== false,
+                    fullscreenable: config.fullscreenable !== false, // 默认支持全屏
                     state: 'normal', // normal, minimized, maximized
                     zIndex: zIndexCounter++,
                     onClose: config.onClose,
@@ -2186,6 +2360,433 @@
                 }
             };
 
+            const setupWindowResize = (element, window) => {
+                if (!window.resizable || window.state === 'maximized') return;
+                
+                const resizeHandles = [
+                    { class: 'n', cursor: 'n-resize' },
+                    { class: 'e', cursor: 'e-resize' },
+                    { class: 's', cursor: 's-resize' },
+                    { class: 'w', cursor: 'w-resize' },
+                    { class: 'ne', cursor: 'ne-resize' },
+                    { class: 'nw', cursor: 'nw-resize' },
+                    { class: 'se', cursor: 'se-resize' },
+                    { class: 'sw', cursor: 'sw-resize' }
+                ];
+                
+                resizeHandles.forEach(handle => {
+                    const handleElement = document.createElement('div');
+                    handleElement.className = `window-resize-handle ${handle.class}`;
+                    handleElement.style.cursor = handle.cursor;
+                    element.appendChild(handleElement);
+                    
+                    // 添加拖拽调整大小事件
+                    handleElement.addEventListener('mousedown', (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        
+                        if (window.state === 'maximized') return;
+                        
+                        startResize(e, element, window, handle.class);
+                    });
+                });
+            };
+
+            const startResize = (e, element, window, direction) => {
+                const startX = e.clientX;
+                const startY = e.clientY;
+                const startWidth = element.offsetWidth;
+                const startHeight = element.offsetHeight;
+                const startLeft = element.offsetLeft;
+                const startTop = element.offsetTop;
+                
+                const minWidth = window.minWidth || 300;
+                const minHeight = window.minHeight || 200;
+                
+                // 计算屏幕边界
+                const screenWidth = window.innerWidth;
+                const screenHeight = window.innerHeight;
+                
+                const onMouseMove = (moveEvent) => {
+                    const deltaX = moveEvent.clientX - startX;
+                    const deltaY = moveEvent.clientY - startY;
+                    
+                    let newWidth = startWidth;
+                    let newHeight = startHeight;
+                    let newLeft = startLeft;
+                    let newTop = startTop;
+                    
+                    // 根据拖拽方向计算新的尺寸和位置
+                    switch (direction) {
+                        case 'n':
+                            newHeight = Math.max(minHeight, startHeight - deltaY);
+                            newTop = startTop + deltaY;
+                            break;
+                        case 'e':
+                            newWidth = Math.max(minWidth, startWidth + deltaX);
+                            break;
+                        case 's':
+                            newHeight = Math.max(minHeight, startHeight + deltaY);
+                            break;
+                        case 'w':
+                            newWidth = Math.max(minWidth, startWidth - deltaX);
+                            newLeft = startLeft + deltaX;
+                            break;
+                        case 'ne':
+                            newHeight = Math.max(minHeight, startHeight - deltaY);
+                            newWidth = Math.max(minWidth, startWidth + deltaX);
+                            newTop = startTop + deltaY;
+                            break;
+                        case 'nw':
+                            newHeight = Math.max(minHeight, startHeight - deltaY);
+                            newWidth = Math.max(minWidth, startWidth - deltaX);
+                            newTop = startTop + deltaY;
+                            newLeft = startLeft + deltaX;
+                            break;
+                        case 'se':
+                            newHeight = Math.max(minHeight, startHeight + deltaY);
+                            newWidth = Math.max(minWidth, startWidth + deltaX);
+                            break;
+                        case 'sw':
+                            newHeight = Math.max(minHeight, startHeight + deltaY);
+                            newWidth = Math.max(minWidth, startWidth - deltaX);
+                            newLeft = startLeft + deltaX;
+                            break;
+                    }
+                    
+                    // 确保窗口不会超出屏幕边界
+                    if (newLeft < 0) {
+                        newWidth += newLeft;
+                        newLeft = 0;
+                    }
+                    
+                    if (newLeft + newWidth > screenWidth) {
+                        newWidth = screenWidth - newLeft;
+                    }
+                    
+                    if (newTop < 0) {
+                        newHeight += newTop;
+                        newTop = 0;
+                    }
+                    
+                    if (newTop + newHeight > screenHeight) {
+                        newHeight = screenHeight - newTop;
+                    }
+                    
+                    // 确保最小尺寸
+                    newWidth = Math.max(minWidth, newWidth);
+                    newHeight = Math.max(minHeight, newHeight);
+                    
+                    // 应用新的尺寸和位置
+                    element.style.width = `${newWidth}px`;
+                    element.style.height = `${newHeight}px`;
+                    element.style.left = `${newLeft}px`;
+                    element.style.top = `${newTop}px`;
+                    
+                    // 更新窗口对象的状态
+                    window.width = newWidth;
+                    window.height = newHeight;
+                    window.x = newLeft;
+                    window.y = newTop;
+                };
+                
+                const onMouseUp = () => {
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                    
+                    // 移除全局样式
+                    document.body.style.userSelect = 'auto';
+                    document.body.style.cursor = 'auto';
+                };
+                
+                // 添加全局事件监听
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+                
+                // 防止文本选择
+                document.body.style.userSelect = 'none';
+                
+                // 设置全局光标
+                let cursor = 'auto';
+                switch (direction) {
+                    case 'n': case 's': cursor = 'ns-resize'; break;
+                    case 'e': case 'w': cursor = 'ew-resize'; break;
+                    case 'ne': case 'sw': cursor = 'nesw-resize'; break;
+                    case 'nw': case 'se': cursor = 'nwse-resize'; break;
+                }
+                document.body.style.cursor = cursor;
+            };
+
+            const setupFullscreenSupport = () => {
+                // 监听ESC键退出全屏
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' || e.key === 'F11') {
+                        e.preventDefault(); // 防止浏览器默认行为
+                        const fullscreenWindow = getFullscreenWindow();
+                        if (fullscreenWindow) {
+                            exitFullscreen(fullscreenWindow.id);
+                        }
+                    }
+                });
+                
+                // 监听F11键进入全屏
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'F11') {
+                        e.preventDefault();
+                        const activeWindowId = StateManager.getState('activeWindowId');
+                        if (activeWindowId && !getFullscreenWindow()) {
+                            const window = windows.get(activeWindowId);
+                            if (window && window.fullscreenable !== false) {
+                                enterFullscreen(activeWindowId);
+                            }
+                        }
+                    }
+                });
+            };
+
+            const getFullscreenWindow = () => {
+                return Array.from(windows.values()).find(win => win.state === 'fullscreen');
+            };
+
+            const isBrowserFullscreen = () => {
+                return !!(document.fullscreenElement || 
+                        document.webkitFullscreenElement || 
+                        document.mozFullScreenElement || 
+                        document.msFullscreenElement);
+            };
+
+            const toggleFullscreen = (windowId) => {
+                const window = windows.get(windowId);
+                if (!window) return;
+                
+                if (window.state === 'fullscreen') {
+                    exitFullscreen(windowId);
+                } else {
+                    enterFullscreen(windowId);
+                }
+            };
+
+            const enterFullscreen = (windowId) => {
+                const window = windows.get(windowId);
+                if (!window) return;
+                
+                const element = document.getElementById(`window_${windowId}`);
+                if (!element) return;
+                
+                // 保存原始状态
+                window.originalState = {
+                    width: window.width,
+                    height: window.height,
+                    x: window.x,
+                    y: window.y,
+                    zIndex: window.zIndex,
+                    state: window.state
+                };
+                
+                // 更新窗口状态
+                window.state = 'fullscreen';
+                window.zIndex = 9999;
+                
+                // 添加全屏类名
+                element.classList.add('fullscreen');
+                document.body.classList.add('window-fullscreen');
+                
+                // 更新样式
+                element.style.cssText = `
+                    width: 100vw !important;
+                    height: 100vh !important;
+                    left: 0 !important;
+                    top: 0 !important;
+                    border-radius: 0 !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                    z-index: ${window.zIndex} !important;
+                    display: flex !important;
+                `;
+                
+                // 隐藏调整大小手柄
+                const resizeHandles = element.querySelectorAll('.window-resize-handle');
+                resizeHandles.forEach(handle => {
+                    handle.style.display = 'none';
+                });
+                
+                // 更新任务栏图标状态
+                updateTaskbarIconState(windowId);
+                
+                // 显示退出提示
+                showFullscreenExitHint();
+                
+                // 尝试进入浏览器全屏模式（可选）
+                try {
+                    if (element.requestFullscreen) {
+                        element.requestFullscreen().catch(err => {
+                            console.log('浏览器全屏请求失败，使用模拟全屏:', err);
+                        });
+                    }
+                } catch (err) {
+                    console.log('全屏模式错误:', err);
+                }
+                
+                // 触发事件
+                EventBus.emit('window:fullscreen', { windowId, state: 'entered' });
+                
+                return true;
+            };
+
+            const safeExitFullscreen = () => {
+                return new Promise((resolve) => {
+                    try {
+                        if (document.fullscreenElement || 
+                            document.webkitFullscreenElement || 
+                            document.mozFullScreenElement || 
+                            document.msFullscreenElement) {
+                            
+                            if (document.exitFullscreen) {
+                                document.exitFullscreen().then(resolve).catch(resolve);
+                            } else if (document.webkitExitFullscreen) {
+                                document.webkitExitFullscreen();
+                                resolve();
+                            } else if (document.mozCancelFullScreen) {
+                                document.mozCancelFullScreen();
+                                resolve();
+                            } else if (document.msExitFullscreen) {
+                                document.msExitFullscreen();
+                                resolve();
+                            } else {
+                                resolve();
+                            }
+                        } else {
+                            resolve();
+                        }
+                    } catch (err) {
+                        console.log('安全退出全屏:', err);
+                        resolve();
+                    }
+                });
+            };
+
+            // 修改exitFullscreen函数使用安全退出
+            const exitFullscreen = async (windowId, restoreOriginal = true) => {
+                const window = windows.get(windowId);
+                if (!window) return false;
+                
+                const element = document.getElementById(`window_${windowId}`);
+                
+                // 安全退出浏览器全屏模式
+                if (isBrowserFullscreen()) {
+                    await safeExitFullscreen();
+                }
+                
+                // 移除全屏类名
+                if (element) {
+                    element.classList.remove('fullscreen');
+                }
+                document.body.classList.remove('window-fullscreen');
+                
+                // 恢复原始状态（如果需要）
+                if (restoreOriginal && window.originalState) {
+                    window.state = window.originalState.state;
+                    window.width = window.originalState.width;
+                    window.height = window.originalState.height;
+                    window.x = window.originalState.x;
+                    window.y = window.originalState.y;
+                    window.zIndex = window.originalState.zIndex;
+                    
+                    if (element) {
+                        element.style.cssText = `
+                            width: ${window.width}px;
+                            height: ${window.height}px;
+                            left: ${window.x}px;
+                            top: ${window.y}px;
+                            z-index: ${window.zIndex};
+                            display: flex;
+                        `;
+                        
+                        // 恢复调整大小手柄
+                        if (window.resizable && window.state !== 'maximized') {
+                            const resizeHandles = element.querySelectorAll('.window-resize-handle');
+                            resizeHandles.forEach(handle => {
+                                handle.style.display = 'block';
+                            });
+                        }
+                    }
+                    
+                    delete window.originalState;
+                } else {
+                    // 如果不恢复原始状态，直接设置为normal
+                    window.state = 'normal';
+                }
+                
+                // 更新任务栏图标状态
+                updateTaskbarIconState(windowId);
+                
+                // 隐藏退出提示
+                hideFullscreenExitHint();
+                
+                // 触发事件
+                EventBus.emit('window:fullscreen', { windowId, state: 'exited' });
+                
+                return true;
+            };
+
+            const showFullscreenExitHint = () => {
+                let hint = document.getElementById('fullscreenExitHint');
+                if (!hint) {
+                    hint = document.createElement('div');
+                    hint.id = 'fullscreenExitHint';
+                    hint.className = 'fullscreen-exit-hint';
+                    hint.innerHTML = '按 ESC 键退出全屏';
+                    document.body.appendChild(hint);
+                }
+                
+                hint.classList.add('show');
+                
+                // 3秒后自动隐藏
+                setTimeout(() => {
+                    hint.classList.remove('show');
+                }, 3000);
+            };
+
+            const hideFullscreenExitHint = () => {
+                const hint = document.getElementById('fullscreenExitHint');
+                if (hint) {
+                    hint.classList.remove('show');
+                }
+            };
+
+            // 添加全屏状态同步函数
+            const syncFullscreenState = () => {
+                const fullscreenWindow = getFullscreenWindow();
+                const isBrowserFs = isBrowserFullscreen();
+                
+                // 如果浏览器全屏已退出但我们的状态还是全屏，需要同步
+                if (fullscreenWindow && !isBrowserFs) {
+                    exitFullscreen(fullscreenWindow.id, true);
+                }
+            };
+
+            // 监听全屏变化
+            const handleFullscreenChange = () => {
+                syncFullscreenState();
+            };
+
+            const cleanupFullscreenState = () => {
+                // 检查是否还有全屏窗口
+                const hasFullscreenWindow = Array.from(windows.values()).some(win => win.state === 'fullscreen');
+                
+                if (!hasFullscreenWindow) {
+                    // 如果没有全屏窗口，确保退出全屏状态
+                    if (isBrowserFullscreen()) {
+                        safeExitFullscreen();
+                    }
+                    document.body.classList.remove('window-fullscreen');
+                    hideFullscreenExitHint();
+                }
+            };
+
+            // 在页面可见性变化时也检查
+            document.addEventListener('visibilitychange', syncFullscreenState);
+
             const renderWindow = (window) => {
                 const container = document.getElementById('windowContainer');
                 if (!container) return;
@@ -2205,10 +2806,19 @@
                     z-index: ${window.zIndex};
                     display: ${window.state === 'minimized' ? 'none' : 'flex'};
                 `;
+
+                // 在窗口元素创建后，添加调整大小手柄
+                if (window.resizable) {
+                    setupWindowResize(windowElement, window);
+                }
                 
                 // 窗口头部
                 const header = document.createElement('div');
                 header.className = 'window-header';
+
+                // 修改窗口头部HTML，添加全屏按钮
+                const canFullscreen = window.fullscreenable !== false;
+                
                 header.innerHTML = `
                     <div class="window-title">
                         <i class="${window.icon}"></i>
@@ -2217,6 +2827,7 @@
                     <div class="window-controls">
                         ${window.minimizable ? '<button class="btn btn-sm btn-secondary window-minimize"><i class="fas fa-window-minimize"></i></button>' : ''}
                         ${window.maximizable ? '<button class="btn btn-sm btn-secondary window-maximize"><i class="fas fa-window-maximize"></i></button>' : ''}
+                        ${canFullscreen ? '<button class="btn btn-sm btn-secondary window-fullscreen" title="全屏"><i class="fas fa-expand"></i></button>' : ''}
                         ${window.closable ? '<button class="btn btn-sm btn-danger window-close"><i class="fas fa-times"></i></button>' : ''}
                     </div>
                 `;
@@ -2267,6 +2878,11 @@
                 const window = windows.get(windowId);
                 if (!window) return;
                 
+                // 如果窗口处于全屏状态，先退出全屏
+                if (window.state === 'fullscreen') {
+                    exitFullscreen(windowId, false); // 不恢复原始状态，直接关闭
+                }
+                
                 if (window.onClose) {
                     window.onClose();
                 }
@@ -2284,6 +2900,11 @@
                     current.delete(windowId);
                     return current;
                 });
+                
+                // 如果关闭的是活动窗口，清空活动窗口ID
+                if (StateManager.getState('activeWindowId') === windowId) {
+                    StateManager.setState('activeWindowId', null);
+                }
                 
                 // 触发事件
                 EventBus.emit('window:closed', { windowId });
@@ -2324,6 +2945,13 @@
                         
                         document.addEventListener('mousemove', onMouseMove);
                         document.addEventListener('mouseup', onMouseUp);
+                    });
+
+                    header.addEventListener('dblclick', (e) => {
+                        if (e.target.closest('.window-controls')) return;
+                        if (window.maximizable) {
+                            toggleMaximize(window.id);
+                        }
                     });
                     
                     const onMouseMove = (e) => {
@@ -2372,12 +3000,67 @@
                 element.addEventListener('mousedown', () => {
                     bringToFront(window.id);
                 });
+
+                // 全屏按钮
+                const fullscreenBtn = element.querySelector('.window-fullscreen');
+                if (fullscreenBtn && window.fullscreenable !== false) {
+                    fullscreenBtn.addEventListener('click', () => {
+                        toggleFullscreen(window.id);
+                    });
+                    
+                    // 更新全屏按钮状态
+                    const updateFullscreenButton = () => {
+                        if (window.state === 'fullscreen') {
+                            fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i>';
+                            fullscreenBtn.title = '退出全屏';
+                            fullscreenBtn.classList.add('active');
+                        } else {
+                            fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
+                            fullscreenBtn.title = '全屏';
+                            fullscreenBtn.classList.remove('active');
+                        }
+                    };
+                    
+                    // 初始更新
+                    updateFullscreenButton();
+                    
+                    // 监听窗口状态变化
+                    const unsubscribe = EventBus.on(`window:fullscreen`, ({ windowId, state }) => {
+                        if (windowId === window.id) {
+                            updateFullscreenButton();
+                        }
+                    });
+                    
+                    // 窗口销毁时取消订阅
+                    const originalDestroy = element.destroy;
+                    element.destroy = function() {
+                        if (unsubscribe) unsubscribe();
+                        if (originalDestroy) originalDestroy.call(this);
+                    };
+                }
+                
+                // 双击标题栏进入/退出全屏
+                header.addEventListener('dblclick', (e) => {
+                    if (e.target.closest('.window-controls')) return;
+                    if (window.fullscreenable !== false) {
+                        toggleFullscreen(window.id);
+                    }
+                });
             };
 
             // 修改：最小化窗口
-            const minimizeWindow = (windowId) => {
+            const minimizeWindow = async (windowId) => {
                 const window = windows.get(windowId);
                 if (!window) return;
+
+                // alert('window.state:'+window.state)
+                if(window.state == 'fullscreen')
+                {
+                    const fullscreenWindow = getFullscreenWindow();
+                    if (fullscreenWindow) {
+                        await exitFullscreen(fullscreenWindow.id);
+                    }
+                }
                 
                 window.state = 'minimized';
                 const element = document.getElementById(`window_${windowId}`);
@@ -2421,8 +3104,9 @@
                 if (!element) return;
                 
                 if (window.state === 'maximized') {
-                    // 恢复
+                    // 恢复窗口
                     window.state = 'normal';
+                    element.classList.remove('maximized');
                     element.style.cssText = `
                         width: ${window.width}px;
                         height: ${window.height}px;
@@ -2430,9 +3114,16 @@
                         top: ${window.y}px;
                         z-index: ${window.zIndex};
                     `;
+                    
+                    // 显示调整大小手柄
+                    const resizeHandles = element.querySelectorAll('.window-resize-handle');
+                    resizeHandles.forEach(handle => {
+                        handle.style.display = 'block';
+                    });
                 } else {
-                    // 最大化
+                    // 最大化窗口
                     window.state = 'maximized';
+                    element.classList.add('maximized');
                     element.style.cssText = `
                         width: 90vw;
                         height: 80vh;
@@ -2440,6 +3131,12 @@
                         top: 10vh;
                         z-index: ${window.zIndex};
                     `;
+                    
+                    // 隐藏调整大小手柄
+                    const resizeHandles = element.querySelectorAll('.window-resize-handle');
+                    resizeHandles.forEach(handle => {
+                        handle.style.display = 'none';
+                    });
                 }
                 
                 if (window.onMaximize) {
@@ -2583,7 +3280,15 @@
                 taskbarScroll,
                 getWindow,
                 getAllWindows,
-                getWindowsByAppId // 新增
+                getWindowsByAppId, // 新增
+                safeExitFullscreen, // 新增
+                isBrowserFullscreen, // 新增
+                getFullscreenWindow, // 新增
+                init: () => {
+                    setupFullscreenSupport(); // 初始化全屏支持
+                    // 初始同步
+                    setTimeout(syncFullscreenState, 100);
+                }
             };
         })();
         
@@ -21420,6 +22125,30 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 }
             });
 
+            AppManager.registerApp({
+                id: 'light-pics',
+                name: '轻相册',
+                icon: 'fas fa-globe',
+                description: '美观的轻相册',
+                color: '#8b5cf6',
+                allowMultiple: true, windowConfig: {
+                    width: 1200,
+                    height: 800
+                },
+                onLaunch: () => {
+                    const container = document.createElement('div');
+                    container.className = 'h-full';
+                    
+                    const iframe = document.createElement('iframe');
+                    iframe.src = 'http://web3.dtns.top/pics2.html?ib3hub=devmyic';
+                    iframe.className = 'w-full h-full border-0';
+                    iframe.allowFullscreen = true;
+                    
+                    container.appendChild(iframe);
+                    return container;
+                }
+            });
+
         };
         
         // 14. 初始化系统
@@ -21442,6 +22171,9 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
             
             // 初始化系统托盘
             initializeSystemTray();
+
+            // 初始化WindowManager（包括全屏支持）
+            WindowManager.init();
             
             // 显示欢迎通知
             setTimeout(() => {
@@ -21589,6 +22321,10 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
             
             EventBus.on('window:maximized', ({ windowId }) => {
                 WindowManager.updateTaskbarIconState?.(windowId);
+            });
+
+            EventBus.on('window:closed', ({ windowId }) => {
+                cleanupFullscreenState();
             });
             
             // 点击其他地方关闭开始菜单
