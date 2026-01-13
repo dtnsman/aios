@@ -55,6 +55,7 @@
             --font-size-md: 16px;
             --font-size-lg: 18px;
             --font-size-xl: 24px;
+            --font-size-xxl: 32px;
             
             /* 动效系统 */
             --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -1024,6 +1025,25 @@
             border-radius: var(--border-radius-md);
             padding: var(--space-sm);
             transition: all var(--transition-fast);
+            font-size:var(--font-size-xxl);/*放大至好看大小的关键*/
+        }
+
+        .desktop-icon .icon-text{
+            font-size:var(--font-size-xxl);
+        }
+
+        .icon-image{
+            width:var(--font-size-xxl);
+            height:var(--font-size-xxl);
+        }
+
+        .start-menu-app .icon-image {
+            width:16px;
+            height:16px;
+        }
+
+        .desktop-icon .icon-emoji {
+            font-size:var(--font-size-xxl);
         }
         
         .desktop-icon:hover {
@@ -1313,6 +1333,14 @@
             .desktop-icon span {
                 font-size: 10px;
             }
+
+            .desktop-icon .icon-text{
+                font-size:35px;
+            }
+
+            .desktop-icon .icon-emoji {
+                font-size:35px;
+            }
             
             .window {
                 min-width: 90vw;
@@ -1345,6 +1373,15 @@
             .desktop-icon i {
                 font-size: 20px;
             }
+
+            .desktop-icon .icon-text{
+                font-size:35px;
+            }
+
+            .desktop-icon .icon-emoji {
+                font-size:35px;
+            }
+            
             
             .start-menu-apps {
                 grid-template-columns: repeat(2, 1fr);
@@ -2031,21 +2068,21 @@
                         return `<i class="${iconConfig}" style="color: ${color}"></i>`;
                     } else if (iconConfig.length <= 3) {
                         // 短文本或emoji，直接显示
-                        return `<span class="icon-text" style="color: ${color};background-color:${bgColor};font-size:16px;">${iconConfig}</span>`;
+                        return `<span class="icon-emoji" style="color: ${color};background-color:${bgColor};">${iconConfig}</span>`;
                     } else {
                         // 长文本，显示首字母或缩写
-                        return `<span class="icon-text" style="color: ${color};background-color:${bgColor};font-size:16px;">${iconConfig.charAt(0)}</span>`;
+                        return `<span class="icon-text" style="color: ${color};background-color:${bgColor};">${iconConfig.charAt(0)}</span>`;
                     }
                 } else if (typeof iconConfig === 'object') {
                     // 支持配置对象
                     if (iconConfig.type === 'fa') {
                         return `<i class="${iconConfig.value}" style="color: ${iconConfig.color};background-color:${iconConfig.bgColor}"></i>`;
                     } else if (iconConfig.type === 'emoji') {
-                        return `<span class="icon-emoji" style="color: ${iconConfig.color};background-color:${iconConfig.bgColor};font-size:16px;">${iconConfig.value}</span>`;
+                        return `<span class="icon-emoji" style="color: ${iconConfig.color};background-color:${iconConfig.bgColor};">${iconConfig.value}</span>`;
                     } else if (iconConfig.type === 'text') {
                         return `<span class="icon-text" style="color: ${iconConfig.color};background-color:${iconConfig.bgColor}">${iconConfig.value}</span>`;
                     } else if (iconConfig.type === 'image') {
-                        return `<img src="${iconConfig.value}" class="icon-image" alt="icon" style="color: ${iconConfig.color};background-color:${iconConfig.bgColor}" width=16px height=16px>`;
+                        return `<img src="${iconConfig.value}" class="icon-image" alt="icon" style="color: ${iconConfig.color};background-color:${iconConfig.bgColor}">`;
                     }
                 }
                 // 默认返回空
@@ -22078,6 +22115,12 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 //     value: '📝',
                 //     // color: 'green',
                 //     // bgColor: 'red'
+                // },
+                // icon: {
+                //     type: 'text',
+                //     value: '📝',
+                //     color: '#ffffff',
+                //     bgColor: 'red'
                 // },
                 // icon: '📝',
                 // icon: 'DTNS.os',
