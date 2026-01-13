@@ -1587,6 +1587,8 @@
 
     <!-- 引入Font Awesome -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <!-- font-awesome-all.min.js是对font-awesome/6.4.0/js/all.min.js的本地缓存——避免CDN出问题后找不到资源 -->
+    <!-- <script src="js/font-awesome-all.min.js"></script> -->
 
     <!-- JavaScript模块系统 -->
     <script>
@@ -2019,6 +2021,36 @@
             `;
             document.head.appendChild(style);
         };
+
+        const renderIcon = (iconConfig,color = null,bgColor = null) => {
+            console.log('renderIcon-iconConfig:',iconConfig,typeof iconConfig ,iconConfig.length)
+            // iconConfig = iconConfig.trim()
+                if (typeof iconConfig === 'string') {
+                    // 如果是字符串，检查是否是Font Awesome类名
+                    if (iconConfig.startsWith('fa') || iconConfig.includes('fa ')) {
+                        return `<i class="${iconConfig}" style="color: ${color}"></i>`;
+                    } else if (iconConfig.length <= 3) {
+                        // 短文本或emoji，直接显示
+                        return `<span class="icon-text" style="color: ${color};background-color:${bgColor};font-size:16px;">${iconConfig}</span>`;
+                    } else {
+                        // 长文本，显示首字母或缩写
+                        return `<span class="icon-text" style="color: ${color};background-color:${bgColor};font-size:16px;">${iconConfig.charAt(0)}</span>`;
+                    }
+                } else if (typeof iconConfig === 'object') {
+                    // 支持配置对象
+                    if (iconConfig.type === 'fa') {
+                        return `<i class="${iconConfig.value}" style="color: ${iconConfig.color};background-color:${iconConfig.bgColor}"></i>`;
+                    } else if (iconConfig.type === 'emoji') {
+                        return `<span class="icon-emoji" style="color: ${iconConfig.color};background-color:${iconConfig.bgColor};font-size:16px;">${iconConfig.value}</span>`;
+                    } else if (iconConfig.type === 'text') {
+                        return `<span class="icon-text" style="color: ${iconConfig.color};background-color:${iconConfig.bgColor}">${iconConfig.value}</span>`;
+                    } else if (iconConfig.type === 'image') {
+                        return `<img src="${iconConfig.value}" class="icon-image" alt="icon" style="color: ${iconConfig.color};background-color:${iconConfig.bgColor}" width=16px height=16px>`;
+                    }
+                }
+                // 默认返回空
+                return '<i class="fas fa-question"></i>';
+            };
         
         // 5. 窗口管理模块
         const WindowManager = (() => {
@@ -2293,7 +2325,7 @@
                 taskbarIcon.id = taskbarIconId;
                 taskbarIcon.className = 'taskbar-icon';
                 taskbarIcon.title = title;
-                taskbarIcon.innerHTML = `<i class="${icon}"></i>`;
+                taskbarIcon.innerHTML = renderIcon(icon);//`<i class="${icon}"></i>`;
                 
                 // 点击任务栏图标恢复/最小化窗口
                 taskbarIcon.addEventListener('click', (e) => {
@@ -2821,7 +2853,7 @@
                 
                 header.innerHTML = `
                     <div class="window-title">
-                        <i class="${window.icon}"></i>
+                        ${renderIcon(window.icon)} 
                         <span>${window.title}</span>
                     </div>
                     <div class="window-controls">
@@ -3305,6 +3337,7 @@
                     icon: appConfig.icon,
                     description: appConfig.description,
                     color: appConfig.color || '#3b82f6',
+                    bgColor:appConfig.bgColor,
                     windowConfig: appConfig.windowConfig || {},
                     onLaunch: appConfig.onLaunch,
                     onClose: appConfig.onClose,
@@ -22027,9 +22060,30 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
             AppManager.registerApp({
                 id: 'web3OS',
                 name: '智体OS-lite',
-                icon: 'fas fa-globe',
+                icon: 'fas fa-link',
+                // icon: {
+                //     type: 'text',
+                //     value: 'DTNS.OS',
+                //     color: '#ffffff',
+                //     bgColor: 'red'
+                // },
+                // icon: {
+                //     type: 'image',
+                //     value: 'http://web3.dtns.top/img/computer.png',
+                //     // color: '#ffffff',
+                //     // bgColor: 'red'
+                // },
+                // icon: {
+                //     type: 'emoji',
+                //     value: '📝',
+                //     // color: 'green',
+                //     // bgColor: 'red'
+                // },
+                // icon: '📝',
+                // icon: 'DTNS.os',
+                // bgColor:'red',
                 description: 'Web3操作系统界面',
-                color: '#8b5cf6',
+                color: '#84cc16',
                 allowMultiple: true, windowConfig: {
                     width: 1200,
                     height: 800
@@ -22054,9 +22108,9 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
             AppManager.registerApp({
                 id: 'dweb',
                 name: '智体头榜',
-                icon: 'fas fa-globe',
+                icon: 'fas fa-chart-line',
                 description: '智体头榜——基于智体节点的社交消息榜',
-                color: '#8b5cf6',
+                color: '#f97316',
                 allowMultiple: true, windowConfig: {
                     width: 1200,
                     height: 800
@@ -22078,9 +22132,9 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
             AppManager.registerApp({
                 id: 'dtns_os_www',
                 name: '智体OS',
-                icon: 'fas fa-globe',
+                icon: 'fas fa-desktop',
                 description: '智体OS————新一代AIOS操作系统',
-                color: '#8b5cf6',
+                color: '#6366f1',
                 allowMultiple: true, windowConfig: {
                     width: 1200,
                     height: 800
@@ -22102,9 +22156,9 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
             AppManager.registerApp({
                 id: 'github',
                 name: 'AIOS',
-                icon: 'fas fa-globe',
+                icon: 'fab fa-github',
                 description: 'AIOS--writen by ai, 20k lines',
-                color: '#8b5cf6',
+                color: '#6cc644',
                 allowMultiple: true, windowConfig: {
                     width: 1200,
                     height: 800
@@ -22128,9 +22182,9 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
             AppManager.registerApp({
                 id: 'light-pics',
                 name: '轻相册',
-                icon: 'fas fa-globe',
+                icon: 'fas fa-images',
                 description: '美观的轻相册',
-                color: '#8b5cf6',
+                color: '#ec4899',
                 allowMultiple: true, windowConfig: {
                     width: 1200,
                     height: 800
@@ -22148,6 +22202,127 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                     return container;
                 }
             });
+
+            AppManager.registerApp({
+                id: 'notebook',
+                name: 'dtns记事本',
+                icon: '📝',// 'fas fa-sticky-note',
+                description: 'markdown记事本',
+                color: '#10b981',
+                allowMultiple: true, windowConfig: {
+                    width: 720,
+                    height: 600
+                },
+                onLaunch: () => {
+                    const container = document.createElement('div');
+                    container.className = 'h-full';
+                    
+                    const iframe = document.createElement('iframe');
+                    iframe.src = 'http://web3.dtns.top/notebook.html?ib3hub=svrdev';
+                    iframe.className = 'w-full h-full border-0';
+                    iframe.allowFullscreen = true;
+                    
+                    container.appendChild(iframe);
+                    return container;
+                }
+            });
+
+            AppManager.registerApp({
+                id: 'dtns_disk',
+                name: 'dtns硬盘',
+                icon: 'fas fa-hdd',
+                description: '基于dtns协议的网络硬盘',
+                color: '#6b7280',
+                allowMultiple: true, windowConfig: {
+                    width: 720,
+                    height: 600
+                },
+                onLaunch: () => {
+                    const container = document.createElement('div');
+                    container.className = 'h-full';
+                    
+                    const iframe = document.createElement('iframe');
+                    iframe.src = 'http://web3.dtns.top/disk.html?ib3hub=svrdev';
+                    iframe.className = 'w-full h-full border-0';
+                    iframe.allowFullscreen = true;
+                    
+                    container.appendChild(iframe);
+                    return container;
+                }
+            });
+
+            AppManager.registerApp({
+                id: 'dtns_aicode',
+                name: '编辑器',
+                icon: 'fas fa-code',
+                description: '基于dtns协议的ai代码编辑器',
+                color: '#10b981',
+                allowMultiple: true, windowConfig: {
+                    width: 720,
+                    height: 600
+                },
+                onLaunch: () => {
+                    const container = document.createElement('div');
+                    container.className = 'h-full';
+                    
+                    const iframe = document.createElement('iframe');
+                    iframe.src = 'http://web3.dtns.top/aicode.html?ib3hub=svrdev';
+                    iframe.className = 'w-full h-full border-0';
+                    iframe.allowFullscreen = true;
+                    
+                    container.appendChild(iframe);
+                    return container;
+                }
+            });
+
+            AppManager.registerApp({
+                id: 'dtns_terminal',
+                name: 'dtns终端',
+                icon: 'fas fa-terminal',
+                description: '基于dtns协议的远程命令行终端',
+                color: '#22c55e',
+                allowMultiple: true, windowConfig: {
+                    width: 720,
+                    height: 600
+                },
+                onLaunch: () => {
+                    const container = document.createElement('div');
+                    container.className = 'h-full';
+                    
+                    const iframe = document.createElement('iframe');
+                    iframe.src = 'http://web3.dtns.top/pty.html?ib3hub=svrdev';
+                    iframe.className = 'w-full h-full border-0';
+                    iframe.allowFullscreen = true;
+                    
+                    container.appendChild(iframe);
+                    return container;
+                }
+            });
+
+            AppManager.registerApp({
+                id: 'dtns_product',
+                name: 'AI产品',
+                icon: 'fas fa-lightbulb',
+                description: '基于dtns.os的AI产品一键创作',
+                color: '#8b5cf6',
+                allowMultiple: true, windowConfig: {
+                    width: 720,
+                    height: 600
+                },
+                onLaunch: () => {
+                    const container = document.createElement('div');
+                    container.className = 'h-full';
+                    
+                    const iframe = document.createElement('iframe');
+                    iframe.src = 'http://web3.dtns.top/aiproduct.html?ib3hub=svrdev';
+                    iframe.className = 'w-full h-full border-0';
+                    iframe.allowFullscreen = true;
+                    
+                    container.appendChild(iframe);
+                    return container;
+                }
+            });
+
 
         };
         
@@ -22197,9 +22372,9 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 const icon = document.createElement('div');
                 icon.className = 'desktop-icon';
                 icon.innerHTML = `
-                    <i class="${app.icon}" style="color: ${app.color}"></i>
-                    <span>${app.name}</span>
-                `;
+                        ${renderIcon(app.icon,app.color,app.bgColor)}
+                        <span>${app.name}</span>
+                    `;
                 
                 icon.addEventListener('click', () => {
                     AppManager.launchApp(app.id);
