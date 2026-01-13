@@ -107,6 +107,8 @@
             display: grid;
             gap: var(--space-md);
         }
+
+        .border-0 {border: 0px;}
         
         .grid-cols-1 { grid-template-columns: repeat(1, 1fr); }
         .grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
@@ -3223,7 +3225,7 @@
                     container.className = 'h-full';
                     
                     const iframe = document.createElement('iframe');
-                    iframe.src = 'http://chat.dtns.top/ibchat-all.html?ib3hub=svrdev';
+                    iframe.src = 'http://chat.dtns.top/ibchat-aios.html?ib3hub=svrdev';
                     iframe.className = 'w-full h-full border-0';
                     iframe.allowFullscreen = true;
                     
