@@ -16,12 +16,38 @@ a big project written by T100 ai coder
 ```javascript
 AppManager.registerApp({
     id: 'web3OS',
-    name: '智体OS-lite',
-    icon: 'fas fa-globe',
-    description: 'Web3操作系统界面',
-    color: '#8b5cf6',
-    allowMultiple: true,    // update here 
-    windowConfig: {
+    name: 'DTNS.OS-lite',
+    icon: 'fas fa-link',
+    // icon: {
+    //     type: 'text',
+    //     value: 'DTNS.OS',
+    //     color: '#ffffff',
+    //     bgColor: 'red'
+    // },
+    // icon: {
+    //     type: 'image',
+    //     value: 'http://web3.dtns.top/img/computer.png',
+    //     // color: '#ffffff',
+    //     // bgColor: 'red'
+    // },
+    // icon: {
+    //     type: 'emoji',
+    //     value: '📝',
+    //     // color: 'green',
+    //     // bgColor: 'red'
+    // },
+    // icon: {
+    //     type: 'text',
+    //     value: '📝',
+    //     color: '#ffffff',
+    //     bgColor: 'red'
+    // },
+    // icon: '📝',
+    // icon: 'DTNS.os',
+    // bgColor:'red',
+    description: 'dtns.os webui',
+    color: '#84cc16',
+    allowMultiple: true, windowConfig: {
         width: 1200,
         height: 800
     },
