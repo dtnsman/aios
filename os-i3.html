@@ -22522,8 +22522,9 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 apps.forEach(app => {
                     const appElement = document.createElement('div');
                     appElement.className = 'start-menu-app';
+                    //<i class="${app.icon}" style="color: ${app.color}; font-size: 28px;"></i>
                     appElement.innerHTML = `
-                        <i class="${app.icon}" style="color: ${app.color}; font-size: 28px;"></i>
+                        ${renderIcon(app.icon,app.color,app.bgColor)} 
                         <div class="font-semibold mt-2">${app.name}</div>
                         <div class="text-xs text-secondary mt-1">${app.description}</div>
                     `;
