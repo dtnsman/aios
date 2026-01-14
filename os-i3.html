@@ -1635,6 +1635,8 @@
 
     <!-- JavaScript模块系统 -->
     <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const ib3hub = urlParams.get('ib3hub') || 'svrdev'
         // ============================================
         // AI OS - 企业级模块化架构
         // ============================================
@@ -4006,7 +4008,7 @@
                     container.className = 'h-full';
                     
                     const iframe = document.createElement('iframe');
-                    iframe.src = 'http://chat.dtns.top/ibchat-aios.html?ib3hub=svrdev';
+                    iframe.src = 'http://chat.dtns.top/ibchat-aios.html?ib3hub='+ib3hub;
                     iframe.className = 'w-full h-full border-0';
                     iframe.allowFullscreen = true;
                     
@@ -22099,6 +22101,11 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 }
             });
 
+            if(!ib3hub)
+            {
+                setTimeout(()=>NotificationSystem.error('传入的URL链接参数缺少ib3hub节点ID！'),2000)
+            }
+
             
             AppManager.registerApp({
                 id: 'web3OS',
@@ -22142,7 +22149,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                     container.className = 'h-full';
                     
                     const iframe = document.createElement('iframe');
-                    iframe.src = 'http://web3.dtns.top/os.html?ib3hub=svrdev';
+                    iframe.src = 'http://web3.dtns.top/os.html?ib3hub='+ib3hub;
                     iframe.className = 'w-full h-full border-0';
                     iframe.allowFullscreen = true;
                     
@@ -22169,7 +22176,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                     container.className = 'h-full';
                     
                     const iframe = document.createElement('iframe');
-                    iframe.src = 'http://dweb.dtns.top/index.html?ib3hub=jobs3d';
+                    iframe.src = 'http://dweb.dtns.top/index.html?ib3hub='+ib3hub;
                     iframe.className = 'w-full h-full border-0';
                     iframe.allowFullscreen = true;
                     
@@ -22243,7 +22250,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                     container.className = 'h-full';
                     
                     const iframe = document.createElement('iframe');
-                    iframe.src = 'http://web3.dtns.top/pics2.html?ib3hub=devmyic';
+                    iframe.src = 'http://web3.dtns.top/pics2.html?ib3hub='+ib3hub;
                     iframe.className = 'w-full h-full border-0';
                     iframe.allowFullscreen = true;
                     
@@ -22267,7 +22274,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                     container.className = 'h-full';
                     
                     const iframe = document.createElement('iframe');
-                    iframe.src = 'http://web3.dtns.top/notebook.html?ib3hub=svrdev';
+                    iframe.src = 'http://web3.dtns.top/notebook.html?ib3hub='+ib3hub
                     iframe.className = 'w-full h-full border-0';
                     iframe.allowFullscreen = true;
                     
@@ -22291,7 +22298,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                     container.className = 'h-full';
                     
                     const iframe = document.createElement('iframe');
-                    iframe.src = 'http://web3.dtns.top/disk.html?ib3hub=svrdev';
+                    iframe.src = 'http://web3.dtns.top/disk.html?ib3hub='+ib3hub
                     iframe.className = 'w-full h-full border-0';
                     iframe.allowFullscreen = true;
                     
@@ -22315,7 +22322,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                     container.className = 'h-full';
                     
                     const iframe = document.createElement('iframe');
-                    iframe.src = 'http://web3.dtns.top/aicode.html?ib3hub=svrdev';
+                    iframe.src = 'http://web3.dtns.top/aicode.html?ib3hub='+ib3hub
                     iframe.className = 'w-full h-full border-0';
                     iframe.allowFullscreen = true;
                     
@@ -22339,7 +22346,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                     container.className = 'h-full';
                     
                     const iframe = document.createElement('iframe');
-                    iframe.src = 'http://web3.dtns.top/pty.html?ib3hub=svrdev';
+                    iframe.src = 'http://web3.dtns.top/pty.html?ib3hub='+ib3hub
                     iframe.className = 'w-full h-full border-0';
                     iframe.allowFullscreen = true;
                     
@@ -22363,7 +22370,191 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                     container.className = 'h-full';
                     
                     const iframe = document.createElement('iframe');
-                    iframe.src = 'http://web3.dtns.top/aiproduct.html?ib3hub=svrdev';
+                    iframe.src = 'http://web3.dtns.top/aiproduct.html?ib3hub='+ib3hub
+                    iframe.className = 'w-full h-full border-0';
+                    iframe.allowFullscreen = true;
+                    
+                    container.appendChild(iframe);
+                    return container;
+                }
+            });
+            AppManager.registerApp({
+                id: 'aimusic',
+                name: 'AI音乐',
+                icon: 'fas fa-music',
+                description: 'ai音乐可一键生成wav音乐',
+                color: '#8b5cf6',
+                allowMultiple: true, windowConfig: {
+                    width: 720,
+                    height: 600
+                },
+                onLaunch: () => {
+                    const container = document.createElement('div');
+                    container.className = 'h-full';
+                    
+                    const iframe = document.createElement('iframe');
+                    iframe.src = 'http://web3.dtns.top/aimusic.html?ib3hub='+ib3hub
+                    iframe.className = 'w-full h-full border-0';
+                    iframe.allowFullscreen = true;
+                    
+                    container.appendChild(iframe);
+                    return container;
+                }
+            });
+            AppManager.registerApp({
+                id: 'aireport',
+                name: 'AI分析报告',
+                icon: 'fas fa-file-chart-line',
+                description: '一键生成指定产品的分析报告',
+                color: '#6366f1',
+                allowMultiple: true, windowConfig: {
+                    width: 720,
+                    height: 600
+                },
+                onLaunch: () => {
+                    const container = document.createElement('div');
+                    container.className = 'h-full';
+                    
+                    const iframe = document.createElement('iframe');
+                    iframe.src = 'http://web3.dtns.top/aireport.html?ib3hub='+ib3hub
+                    iframe.className = 'w-full h-full border-0';
+                    iframe.allowFullscreen = true;
+                    
+                    container.appendChild(iframe);
+                    return container;
+                }
+            });
+            AppManager.registerApp({
+                id: 'appstore',
+                name: '智体应用商店',
+                icon: 'fas fa-store',
+                description: '快速查看ai-agent生成的的web智体应用',
+                color: '#84cc16',
+                allowMultiple: true, windowConfig: {
+                    width: 720,
+                    height: 600
+                },
+                onLaunch: () => {
+                    const container = document.createElement('div');
+                    container.className = 'h-full';
+                    
+                    const iframe = document.createElement('iframe');
+                    iframe.src = 'http://dweb.dtns.top/apps.html?ib3hub='+ib3hub
+                    iframe.className = 'w-full h-full border-0';
+                    iframe.allowFullscreen = true;
+                    
+                    container.appendChild(iframe);
+                    return container;
+                }
+            });
+            AppManager.registerApp({
+                id: 'pointcard',
+                name: 'AI点卡',
+                icon: 'fas fa-coins',//💳  fas fa-credit-card
+                description: 'AI点卡用于AI-agent应用内积分扣减',
+                color: '#f59e0b',
+                allowMultiple: true, windowConfig: {
+                    width: 720,
+                    height: 600
+                },
+                onLaunch: () => {
+                    const container = document.createElement('div');
+                    container.className = 'h-full';
+                    
+                    const iframe = document.createElement('iframe');
+                    iframe.src = 'http://web3.dtns.top/pointcard.html?ib3hub='+ib3hub
+                    iframe.className = 'w-full h-full border-0';
+                    iframe.allowFullscreen = true;
+                    
+                    container.appendChild(iframe);
+                    return container;
+                }
+            });
+            AppManager.registerApp({
+                id: 'aimanager',
+                name: '智体管家',
+                icon: 'fas fa-tools',
+                description: 'ai-agent管家，可对话查询和跳转智体应用agent',
+                color: '#3b82f6',
+                allowMultiple: true, windowConfig: {
+                    width: 720,
+                    height: 600
+                },
+                onLaunch: () => {
+                    const container = document.createElement('div');
+                    container.className = 'h-full';
+                    
+                    const iframe = document.createElement('iframe');
+                    iframe.src = 'http://web3.dtns.top/ibm.html?ib3hub='+ib3hub
+                    iframe.className = 'w-full h-full border-0';
+                    iframe.allowFullscreen = true;
+                    
+                    container.appendChild(iframe);
+                    return container;
+                }
+            });
+            AppManager.registerApp({
+                id: 'aisite',
+                name: 'AI产品原型',
+                icon: '💝',
+                description: 'ai-agent快速生成产品原型-支持输出web网页',
+                color: '#ec4899',
+                allowMultiple: true, windowConfig: {
+                    width: 720,
+                    height: 600
+                },
+                onLaunch: () => {
+                    const container = document.createElement('div');
+                    container.className = 'h-full';
+                    
+                    const iframe = document.createElement('iframe');
+                    iframe.src = 'http://web3.dtns.top/aisite.html?ib3hub='+ib3hub
+                    iframe.className = 'w-full h-full border-0';
+                    iframe.allowFullscreen = true;
+                    
+                    container.appendChild(iframe);
+                    return container;
+                }
+            });
+            AppManager.registerApp({
+                id: 'aicomputer',
+                name: 'dtns主机',
+                icon: 'fas fa-network-wired',
+                description: 'dtns协议远程访问PC或手机智体节点',
+                color: '#06b6d4',
+                allowMultiple: true, windowConfig: {
+                    width: 720,
+                    height: 600
+                },
+                onLaunch: () => {
+                    const container = document.createElement('div');
+                    container.className = 'h-full';
+                    
+                    const iframe = document.createElement('iframe');
+                    iframe.src = 'http://web3.dtns.top/computer.html?ib3hub='+ib3hub
+                    iframe.className = 'w-full h-full border-0';
+                    iframe.allowFullscreen = true;
+                    
+                    container.appendChild(iframe);
+                    return container;
+                }
+            });
+             AppManager.registerApp({
+                id: 'olele',
+                name: '哦了吗Olele',
+                icon: '💝',
+                description: 'ai-agent创造的轻社交-熟人关怀微应用',
+                color: '#8b5cf6',
+                allowMultiple: true, windowConfig: {
+                    width: 720,
+                    height: 600
+                },
+                onLaunch: () => {
+                    const container = document.createElement('div');
+                    container.className = 'h-full';
+                    
+                    const iframe = document.createElement('iframe');
+                    iframe.src = 'http://web3apps.devmyic.html.dtns.top/olele4.html'
                     iframe.className = 'w-full h-full border-0';
                     iframe.allowFullscreen = true;
                     
@@ -22548,7 +22739,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
             });
 
             EventBus.on('window:closed', ({ windowId }) => {
-                cleanupFullscreenState();
+                WindowManager.cleanupFullscreenState?.();
             });
             
             // 点击其他地方关闭开始菜单
