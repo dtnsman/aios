@@ -20909,7 +20909,7 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                     container.className = 'h-full';
                     
                     const iframe = document.createElement('iframe');
-                    iframe.src = 'http://web3.dtns.top/aisite.html?ib3hub='+ib3hub
+                    iframe.src = 'http://web3.dtns.top/aisite-open.html?ib3hub='+ib3hub
                     iframe.className = 'w-full h-full border-0';
                     iframe.allowFullscreen = true;
                     
@@ -20964,6 +20964,28 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                     iframe.allowFullscreen = true;
                     
                     container.appendChild(iframe);
+                    return container;
+                }
+            });
+
+            AppManager.registerApp({
+                id: 'qrcode_rcog',
+                name: '扫一扫',
+                icon: '扫',
+                description: '支持二维码扫码以快速复制内容',
+                color: '#10b981',
+                allowMultiple: true, windowConfig: {
+                    width: 500,
+                    height: 600,
+                    minWidth: 400,
+                    minHeight: 300
+                },
+                onLaunch: () => {
+                    const container = document.createElement('div');
+                    container.className = 'h-full';
+                    
+                    container.innerHTML = '<h3>自动跳转浏览器扫一扫</h3>'
+                    window.open('https://www.dtns.top/qrcode-recog.html','_blank')
                     return container;
                 }
             });
@@ -21253,15 +21275,94 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
             });
             
             // 更新时间显示
+            // 修改时间显示逻辑
             const updateTimeDisplay = () => {
                 const timeDisplay = document.getElementById('timeDisplay');
                 if (timeDisplay) {
-                    timeDisplay.textContent = `${CoreUtils.formatTime()} | ${CoreUtils.formatDate()}`;
+                    // 默认只显示时间
+                    timeDisplay.textContent = CoreUtils.formatTime();
+                    timeDisplay.title = CoreUtils.formatDate(); // 添加完整日期作为提示
                 }
             };
+
+            // 修改时间显示点击事件
+            const timeDisplay = document.getElementById('timeDisplay');
+            if (timeDisplay) {
+                let showFullTime = false;
+                
+                timeDisplay.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    showFullTime = !showFullTime;
+                    
+                    // if (showFullTime) {
+                    //     // 显示完整时间
+                    //     timeDisplay.textContent = `${CoreUtils.formatTime()} | ${CoreUtils.formatDate()}`;
+                    // } else {
+                    //     // 只显示时间
+                    //     timeDisplay.textContent = CoreUtils.formatTime();
+                    // }
+                    NotificationSystem.info(`&nbsp; &nbsp当前时间：${CoreUtils.formatTime()} | ${CoreUtils.formatDate()}`)
+                });
+                
+                // 点击其他地方恢复简洁显示
+                document.addEventListener('click', (e) => {
+                    if (!timeDisplay.contains(e.target) && showFullTime) {
+                        showFullTime = false;
+                        timeDisplay.textContent = CoreUtils.formatTime();
+                    }
+                });
+            }
+
+            // 修改系统托盘样式，减少时间显示宽度
+            const addTaskbarStyles = () => {
+                const style = document.createElement('style');
+                style.textContent = `
+                    /* 修改时间显示样式 */
+                    #timeDisplay {
+                        min-width: 60px;
+                        max-width: 120px;
+                        padding: 0 8px;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        font-size: var(--font-size-sm);
+                    }
+                    
+                    #timeDisplay:hover {
+                        background-color: rgba(255, 255, 255, 0.1);
+                        border-radius: var(--border-radius-sm);
+                    }
+                    
+                    /* 移动端优化 */
+                    @media (max-width: 768px) {
+                        #timeDisplay {
+                            min-width: 50px;
+                            max-width: 80px;
+                            padding: 0 4px;
+                            font-size: var(--font-size-xs);
+                        }
+                        
+                        .system-tray {
+                            gap: var(--space-xs);
+                        }
+                    }
+                    
+                    @media (max-width: 480px) {
+                        #timeDisplay {
+                            min-width: 45px;
+                            max-width: 70px;
+                        }
+                    }
+                `;
+                document.head.appendChild(style);
+            };
+
+            addTaskbarStyles()
             
             updateTimeDisplay();
-            setInterval(updateTimeDisplay, 60000);
+            setInterval(updateTimeDisplay, 10000);
             
                         // 监听系统状态变化
             StateManager.subscribe('system.battery', (battery) => {
