@@ -1568,6 +1568,80 @@
                 min-height: 20px;
             }
         }
+
+        /* 上下文菜单样式 */
+        .context-menu {
+            position: fixed;
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-md);
+            box-shadow: var(--shadow-lg);
+            min-width: 180px;
+            z-index: var(--z-index-popover);
+            padding: var(--space-xs) 0;
+            animation: fadeIn 0.15s ease-out;
+            backdrop-filter: blur(10px);
+        }
+
+        .context-menu-item {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            padding: var(--space-sm) var(--space-md);
+            color: var(--text-primary);
+            text-align: left;
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            font-size: var(--font-size-sm);
+            gap: var(--space-sm);
+        }
+
+        .context-menu-item:hover {
+            background-color: rgba(59, 130, 246, 0.1);
+            color: var(--color-primary);
+        }
+
+        .context-menu-item:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .context-menu-item:disabled:hover {
+            background-color: transparent;
+            color: var(--text-primary);
+        }
+
+        .context-menu-divider {
+            height: 1px;
+            background-color: var(--border-color);
+            margin: var(--space-xs) 0;
+        }
+
+        .context-menu-header {
+            padding: var(--space-sm) var(--space-md);
+            color: var(--text-secondary);
+            font-size: var(--font-size-xs);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* 桌面右键菜单 */
+        .desktop-context-menu {
+            min-width: 200px;
+        }
+
+        /* 任务栏右键菜单 */
+        .taskbar-context-menu {
+            min-width: 160px;
+        }
+
+        /* 窗口右键菜单 */
+        .window-context-menu {
+            min-width: 180px;
+        }
     </style>
 </head>
 <body>
@@ -1587,13 +1661,13 @@
                 <div class="taskbar-icon active" id="aiAssistantIcon">
                     <i class="fas fa-robot"></i>
                 </div>
-                <div class="taskbar-icon" id="fileManagerIcon">
+                <div class="taskbar-icon" id="fileManagerIcon" style="display: none;">
                     <i class="fas fa-folder"></i>
                 </div>
-                <div class="taskbar-icon" id="networkIcon">
+                <div class="taskbar-icon" id="networkIcon" style="display: none;">
                     <i class="fas fa-wifi"></i>
                 </div>
-                <div class="taskbar-icon" id="settingsIcon">
+                <div class="taskbar-icon" id="settingsIcon" style="display: none;">
                     <i class="fas fa-cog"></i>
                 </div>
             </div>
@@ -1625,7 +1699,7 @@
         <div id="modalContainer"></div>
         
         <!-- 上下文菜单容器 -->
-        <div id="contextMenuContainer"></div>
+        <div id="contextMenuContainer" style="z-index: 5000;position: fixed"></div>
     </div>
 
     <!-- 引入Font Awesome -->
@@ -2096,7 +2170,266 @@
                 // 默认返回空
                 return '<i class="fas fa-question"></i>';
             };
-        
+            // 上下文菜单管理模块
+            const ContextMenuManager = (() => {
+                let currentMenu = null;
+                
+                const show = (config) => {
+                    // 关闭现有菜单
+                    close();
+                    
+                    const menu = document.createElement('div');
+                    menu.className = `context-menu ${config.className || ''}`;
+                    menu.style.cssText = `
+                        position: fixed;
+                        left: ${config.x}px;
+                        top: ${config.y}px;
+                        z-index: ${config.zIndex || 'var(--z-index-popover)'};
+                    `;
+                    
+                    // 添加菜单项
+                    if (config.items && config.items.length > 0) {
+                        config.items.forEach(item => {
+                            if (item.type === 'divider') {
+                                const divider = document.createElement('div');
+                                divider.className = 'context-menu-divider';
+                                menu.appendChild(divider);
+                            } else if (item.type === 'header') {
+                                const header = document.createElement('div');
+                                header.className = 'context-menu-header';
+                                header.textContent = item.text;
+                                menu.appendChild(header);
+                            } else {
+                                const menuItem = document.createElement('button');
+                                menuItem.className = 'context-menu-item';
+                                menuItem.disabled = item.disabled || false;
+                                
+                                if (item.icon) {
+                                    const icon = document.createElement('i');
+                                    icon.className = item.icon;
+                                    menuItem.appendChild(icon);
+                                }
+                                
+                                const text = document.createElement('span');
+                                text.textContent = item.text;
+                                menuItem.appendChild(text);
+                                
+                                if (item.shortcut) {
+                                    const shortcut = document.createElement('span');
+                                    shortcut.className = 'ml-auto text-xs text-muted';
+                                    shortcut.textContent = item.shortcut;
+                                    menuItem.appendChild(shortcut);
+                                }
+                                
+                                if (item.action && !item.disabled) {
+                                    menuItem.addEventListener('click', (e) => {
+                                        e.stopPropagation();
+                                        item.action();
+                                        close();
+                                    });
+                                }
+                                
+                                menu.appendChild(menuItem);
+                            }
+                        });
+                    }
+                    
+                    document.body.appendChild(menu);
+                    currentMenu = menu;
+                    
+                    // 点击其他地方关闭菜单
+                    setTimeout(() => {
+                        document.addEventListener('click', handleOutsideClick);
+                        document.addEventListener('contextmenu', handleOutsideClick);
+                    }, 10);
+                    
+                    // 确保菜单在可视区域内
+                    adjustMenuPosition(menu);
+                    
+                    return menu;
+                };
+                
+                const adjustMenuPosition = (menu) => {
+                    const rect = menu.getBoundingClientRect();
+                    const viewportWidth = window.innerWidth;
+                    const viewportHeight = window.innerHeight;
+                    
+                    let adjustedLeft = parseFloat(menu.style.left);
+                    let adjustedTop = parseFloat(menu.style.top);
+                    
+                    // 检查右侧边界
+                    if (rect.right > viewportWidth) {
+                        adjustedLeft = viewportWidth - rect.width - 10;
+                    }
+                    
+                    // 检查底部边界
+                    if (rect.bottom > viewportHeight) {
+                        adjustedTop = viewportHeight - rect.height - 10;
+                    }
+                    
+                    // 检查左侧边界
+                    if (adjustedLeft < 10) {
+                        adjustedLeft = 10;
+                    }
+                    
+                    // 检查顶部边界
+                    if (adjustedTop < 10) {
+                        adjustedTop = 10;
+                    }
+                    
+                    menu.style.left = `${adjustedLeft}px`;
+                    menu.style.top = `${adjustedTop}px`;
+                };
+                
+                const handleOutsideClick = (e) => {
+                    if (currentMenu && !currentMenu.contains(e.target)) {
+                        close();
+                    }
+                };
+                
+                const close = () => {
+                    if (currentMenu) {
+                        currentMenu.remove();
+                        currentMenu = null;
+                        document.removeEventListener('click', handleOutsideClick);
+                        document.removeEventListener('contextmenu', handleOutsideClick);
+                    }
+                };
+                
+                const isOpen = () => {
+                    return currentMenu !== null;
+                };
+                
+                // 预定义菜单类型
+                const menuTypes = {
+                    desktop: (app) => ({
+                        className: 'desktop-context-menu',
+                        items: [
+                            { text: '打开', icon: 'fas fa-play', action: () => AppManager.launchApp(app.id) },
+                            { type: 'divider' },
+                            { text: '创建快捷方式', icon: 'fas fa-link', action: () => {
+                                NotificationSystem.success('创建成功', `已为 "${app.name}" 创建快捷方式`);
+                            }},
+                            { text: '发送到', icon: 'fas fa-share', action: () => {
+                                // 发送到功能
+                            }},
+                            { type: 'divider' },
+                            { text: '卸载', icon: 'fas fa-trash', action: () => {
+                                if (confirm(`确定要卸载 "${app.name}" 吗？`)) {
+                                    NotificationSystem.info('卸载中', `正在卸载 "${app.name}"...`);
+                                }
+                            }},
+                            { type: 'divider' },
+                            { text: '属性', icon: 'fas fa-info-circle', action: () => {
+                                NotificationSystem.info('应用属性', `${app.name} - ${app.description}`);
+                            }}
+                        ]
+                    }),
+                    
+                    taskbarWindow: (windowId) => {
+                        const window = WindowManager.getWindow(windowId);
+                        if (!window) return { items: [] };
+                        
+                        return {
+                            className: 'taskbar-context-menu',
+                            items: [
+                                { 
+                                    text: window.state === 'minimized' ? '恢复' : '最小化', 
+                                    icon: window.state === 'minimized' ? 'fas fa-window-restore' : 'fas fa-window-minimize', 
+                                    action: () => {
+                                        if (window.state === 'minimized') {
+                                            WindowManager.restoreWindow(windowId);
+                                        } else {
+                                            WindowManager.minimizeWindow(windowId);
+                                        }
+                                    }
+                                },
+                                { 
+                                    text: '最大化', 
+                                    icon: 'fas fa-window-maximize', 
+                                    action: () => WindowManager.toggleMaximize(windowId),
+                                    disabled: !window.maximizable
+                                },
+                                { 
+                                    text: window.state === 'fullscreen' ? '退出全屏' : '全屏', 
+                                    icon: window.state === 'fullscreen' ? 'fas fa-compress' : 'fas fa-expand', 
+                                    action: () => {
+                                        if (window.state === 'fullscreen') {
+                                            WindowManager.exitFullscreen(windowId);
+                                        } else {
+                                            WindowManager.toggleFullscreen(windowId);
+                                        }
+                                    },
+                                    disabled: !window.fullscreenable
+                                },
+                                { type: 'divider' },
+                                { 
+                                    text: '关闭', 
+                                    icon: 'fas fa-times', 
+                                    action: () => WindowManager.closeWindow(windowId),
+                                    disabled: !window.closable
+                                }
+                            ]
+                        };
+                    },
+                    
+                    taskbarEmpty: () => ({
+                        className: 'taskbar-context-menu',
+                        items: [
+                            { text: '任务栏设置', icon: 'fas fa-cog', action: () => {
+                                NotificationSystem.info('任务栏设置', '任务栏设置功能开发中...');
+                            }},
+                            { type: 'divider' },
+                            { text: '显示桌面', icon: 'fas fa-desktop', action: () => {
+                                // 最小化所有窗口
+                                const windows = WindowManager.getAllWindows();
+                                windows.forEach(win => {
+                                    if (win.state !== 'minimized') {
+                                        WindowManager.minimizeWindow(win.id);
+                                    }
+                                });
+                            }},
+                            { type: 'divider' },
+                            { 
+                                text: '任务管理器', 
+                                icon: 'fas fa-tasks', 
+                                action: () => {
+                                    AppManager.launchApp('taskManager');
+                                }
+                            }
+                        ]
+                    }),
+                    
+                    window: (windowId) => {
+                        const window = WindowManager.getWindow(windowId);
+                        if (!window) return { items: [] };
+                        
+                        return {
+                            className: 'window-context-menu',
+                            items: [
+                                { text: '移动', icon: 'fas fa-arrows-alt', action: () => {
+                                    // 移动窗口功能
+                                }},
+                                { text: '大小', icon: 'fas fa-expand-arrows-alt', action: () => {
+                                    // 调整大小功能
+                                }},
+                                { type: 'divider' },
+                                { text: '最小化', icon: 'fas fa-window-minimize', action: () => WindowManager.minimizeWindow(windowId) },
+                                { text: '最大化', icon: 'fas fa-window-maximize', action: () => WindowManager.toggleMaximize(windowId) },
+                                { type: 'divider' },
+                                { text: '关闭', icon: 'fas fa-times', action: () => WindowManager.closeWindow(windowId) }
+                            ]
+                        };
+                    }
+                };
+                
+                return {
+                    show,
+                    close,
+                    isOpen,
+                    menuTypes
+                };
+            })();
         // 5. 窗口管理模块
         const WindowManager = (() => {
             const windows = new Map();
@@ -3297,73 +3630,14 @@
             
             // 新增：显示任务栏右键菜单
             const showTaskbarContextMenu = (e, windowId) => {
-                const menu = document.createElement('div');
-                menu.className = 'dropdown-menu';
-                menu.style.cssText = `
-                    position: fixed;
-                    left: ${e.clientX}px;
-                    top: ${e.clientY}px;
-                    z-index: 1000;
-                `;
+                e.preventDefault();
+                e.stopPropagation();
                 
-                const window = windows.get(windowId);
-                if (!window) return;
-                
-                const items = [
-                    { 
-                        text: window.state === 'minimized' ? '恢复' : '最小化', 
-                        icon: window.state === 'minimized' ? 'fas fa-window-restore' : 'fas fa-window-minimize', 
-                        action: () => {
-                            if (window.state === 'minimized') {
-                                restoreWindow(windowId);
-                            } else {
-                                minimizeWindow(windowId);
-                            }
-                        }
-                    },
-                    { 
-                        text: '最大化', 
-                        icon: 'fas fa-window-maximize', 
-                        action: () => toggleMaximize(windowId),
-                        disabled: !window.maximizable
-                    },
-                    { 
-                        text: '关闭', 
-                        icon: 'fas fa-times', 
-                        action: () => closeWindow(windowId),
-                        disabled: !window.closable
-                    }
-                ];
-                
-                items.forEach(item => {
-                    if (item.disabled) return;
-                    
-                    const menuItem = document.createElement('button');
-                    menuItem.className = 'dropdown-item';
-                    menuItem.innerHTML = `
-                        <i class="${item.icon} mr-2"></i>
-                        ${item.text}
-                    `;
-                    menuItem.addEventListener('click', () => {
-                        item.action();
-                        menu.remove();
-                    });
-                    menu.appendChild(menuItem);
+                ContextMenuManager.show({
+                    x: e.clientX,
+                    y: e.clientY,
+                    ...ContextMenuManager.menuTypes.taskbarWindow(windowId)
                 });
-                
-                document.body.appendChild(menu);
-                
-                // 点击其他地方关闭菜单
-                const closeMenu = (clickEvent) => {
-                    if (!menu.contains(clickEvent.target)) {
-                        menu.remove();
-                        document.removeEventListener('click', closeMenu);
-                    }
-                };
-                
-                setTimeout(() => {
-                    document.addEventListener('click', closeMenu);
-                }, 100);
             };
             
             // 修改：获取所有窗口（包括任务栏信息）
@@ -3389,6 +3663,7 @@
                 minimizeWindow,
                 restoreWindow,
                 toggleMaximize,
+                toggleFullscreen,
                 bringToFront,
                 taskbarScroll,
                 getWindow,
@@ -13727,6 +14002,37 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                                 switchCategory(item.dataset.category);
                             });
                         });
+
+                        // 任务栏空白区域右键菜单
+                        const taskbar = document.querySelector('.taskbar');
+                        if (taskbar) {
+                            taskbar.addEventListener('contextmenu', (e) => {
+                                // 确保不是点击在图标上
+                                if (!e.target.closest('.taskbar-icon') && !e.target.closest('#startButton')) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    
+                                    ContextMenuManager.show({
+                                        x: e.clientX,
+                                        y: e.clientY,
+                                        ...ContextMenuManager.menuTypes.taskbarEmpty()
+                                    });
+                                }
+                            });
+                        }
+
+                        // 点击其他地方关闭所有上下文菜单
+                        document.addEventListener('click', (e) => {
+                            if (!e.target.closest('.context-menu')) {
+                                ContextMenuManager.close();
+                            }
+                        });
+
+                        document.addEventListener('contextmenu', (e) => {
+                            if (!e.target.closest('.context-menu')) {
+                                ContextMenuManager.close();
+                            }
+                        });
                         
                         // 初始化搜索
                         setupSearch();
@@ -21100,7 +21406,13 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 
                 icon.addEventListener('contextmenu', (e) => {
                     e.preventDefault();
-                    showDesktopContextMenu(e, app);
+                    e.stopPropagation();
+                    
+                    ContextMenuManager.show({
+                        x: e.clientX,
+                        y: e.clientY,
+                        ...ContextMenuManager.menuTypes.desktop(app)
+                    });
                 });
                 
                 desktop.appendChild(icon);
@@ -21662,7 +21974,21 @@ ${files.map(f => `  ${f.name} (${f.size})`).join('\n')}
                 setTimeout(() => {
                     NotificationSystem.info('系统启动', 'AI 操作系统初始化完成');
                 }, 500);
-                
+
+                //默认启动应用【定制系统中将非常有用】
+                if(false)
+                {
+                    setTimeout(()=>AppManager.launchApp('dtns_os_www',{windowConfig:{x:1,y:1}}),10)
+                    setTimeout(()=>AppManager.launchApp('aiAssistant',{windowConfig:{x:100,y:250}}),50)
+                    // setTimeout(()=>{
+                    //     let winID = AppManager.launchApp('aiAssistant',{windowConfig:{x:1,y:1}})
+                    //     WindowManager.toggleFullscreen(winID) //一打开应用即全屏（非常棒——适用于独占型应用打开————特别是手机或平板、PC等设备上默认进入特定智体应用）
+                    // },550)
+                    setTimeout(()=>{
+                        const winid = AppManager.launchApp('dweb',{windowConfig:{x:500,y:200}})
+                        // WindowManager.minimizeWindow(winid)  //默认最小化指定应用
+                    },300)
+                }
                 console.log('AI OS 启动成功');
             } catch (error) {
                 console.error('AI OS 启动失败:', error);
